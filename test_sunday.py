@@ -77,9 +77,30 @@ def main():
     print("✅ Login successful!")
     print(f"   Token: {client.access_token[:20]}..." if client.access_token else "   Token: None")
 
-    # Fetch schedule
+    # Fetch schedule with debug
     print("\nFetching schedule...")
     now = datetime.now()
+
+    # Debug: Raw schedule fetch to see response structure
+    debug_sched = requests.post(
+        f"{BASE_URL}/schedule/weekly",
+        json={
+            "from": now.strftime("%Y-%m-%dT00:00:00.000Z"),
+            "to": (now + timedelta(days=10)).strftime("%Y-%m-%dT23:59:59.999Z"),
+            "locations_box_id": config.locations_box_id,
+        },
+        headers={**DEFAULT_HEADERS, "accesstoken": client.access_token, "refreshtoken": client.refresh_token or ""},
+    )
+    print(f"   Schedule response status: {debug_sched.status_code}")
+    sched_data = debug_sched.json()
+    print(f"   Response type: {type(sched_data)}")
+    if isinstance(sched_data, list):
+        print(f"   List length: {len(sched_data)}")
+        if len(sched_data) > 0:
+            print(f"   First item keys: {sched_data[0].keys() if isinstance(sched_data[0], dict) else type(sched_data[0])}")
+    elif isinstance(sched_data, dict):
+        print(f"   Dict keys: {sched_data.keys()}")
+
     sessions = client.get_schedule(
         from_date=now,
         to_date=now + timedelta(days=10),  # Look ahead 10 days to find next Sunday

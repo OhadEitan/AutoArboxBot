@@ -158,11 +158,29 @@ class ArboxClient:
             response.raise_for_status()
             data = response.json()
 
+            # Handle both list response and {"data": [...]} response
+            items = data if isinstance(data, list) else data.get("data", [])
+
             sessions = []
-            for item in data.get("data", []):
+            for item in items:
+                # Handle box_categories which can be dict or nested
+                box_cat = item.get("box_categories", {})
+                if isinstance(box_cat, list) and len(box_cat) > 0:
+                    cat_name = box_cat[0].get("name", "Unknown")
+                elif isinstance(box_cat, dict):
+                    cat_name = box_cat.get("name", "Unknown")
+                else:
+                    cat_name = "Unknown"
+
+                # Handle coach which can be dict or None
+                coach = item.get("coach")
+                coach_name = None
+                if isinstance(coach, dict):
+                    coach_name = coach.get("full_name")
+
                 session = Session(
                     id=item["id"],
-                    name=item.get("box_categories", {}).get("name", "Unknown"),
+                    name=cat_name,
                     date=item["date"],
                     time=item["time"],
                     end_time=item["end_time"],
@@ -170,7 +188,7 @@ class ArboxClient:
                     registered=item["registered"],
                     free=item["free"],
                     booking_option=item["booking_option"],
-                    coach_name=item.get("coach", {}).get("full_name") if item.get("coach") else None,
+                    coach_name=coach_name,
                     day_of_week=item["day_of_week"],
                     enable_registration_time=item.get("enable_registration_time", 72),
                     user_booked=item.get("user_booked"),
