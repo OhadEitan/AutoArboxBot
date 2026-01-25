@@ -139,10 +139,21 @@ def main():
 
         if s.can_register:
             print(f"\n🎯 Registering for {s.date} {s.time}...")
+            print(f"   Before: {s.registered}/{s.max_users} registered")
             result = client.register(s.id, config.membership_user_id)
             if result.success:
+                # Fetch updated schedule to see new count
+                updated_sessions = client.get_schedule(
+                    from_date=now,
+                    to_date=now + timedelta(days=10),
+                    locations_box_id=config.locations_box_id,
+                    boxes_id=config.boxes_id,
+                )
+                updated = next((x for x in updated_sessions if x.id == s.id), None)
+                if updated:
+                    print(f"   After:  {updated.registered}/{updated.max_users} registered")
+                    print(f"   📍 You are #{updated.registered} in the list!")
                 print(f"✅ SUCCESS! Registered for {s.date} at {s.time}")
-                print(f"   Session ID: {s.id}")
             else:
                 print(f"❌ Failed: {result.message}")
             break
