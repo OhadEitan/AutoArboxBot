@@ -107,21 +107,22 @@ class ArboxClient:
             response.raise_for_status()
             data = response.json()
 
-            # Extract tokens from response
+            # Try to extract tokens from response body first
             if "data" in data:
-                self.access_token = data["data"].get("accessToken")
-                self.refresh_token = data["data"].get("refreshToken")
-                logger.info("Login successful")
-                return True
-            else:
-                # Tokens might be in headers
+                self.access_token = data["data"].get("accessToken") or data["data"].get("accesstoken")
+                self.refresh_token = data["data"].get("refreshToken") or data["data"].get("refreshtoken")
+
+            # Also check response headers (Arbox sends tokens there)
+            if not self.access_token:
                 self.access_token = response.headers.get("accesstoken")
                 self.refresh_token = response.headers.get("refreshtoken")
-                if self.access_token:
-                    logger.info("Login successful (tokens from headers)")
-                    return True
 
-            logger.error(f"Login failed: No tokens in response")
+            # Verify we actually got a token
+            if self.access_token:
+                logger.info("Login successful")
+                return True
+
+            logger.error(f"Login failed: No tokens in response. Keys: {data.keys() if isinstance(data, dict) else 'not dict'}")
             return False
 
         except requests.exceptions.HTTPError as e:

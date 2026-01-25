@@ -7,6 +7,7 @@ Run: python test_sunday.py
 import sys
 sys.path.insert(0, '.')
 
+import requests
 from datetime import datetime, timedelta
 from src.config import (
     UserConfig,
@@ -17,7 +18,7 @@ from src.config import (
     load_target_sessions,
     DAY_NAMES,
 )
-from src.arbox_client import ArboxClient
+from src.arbox_client import ArboxClient, BASE_URL, DEFAULT_HEADERS
 
 def main():
     print("\n=== AutoArboxBot Sunday 21:00 Test ===\n")
@@ -53,13 +54,28 @@ def main():
     save_target_sessions([target])
     print(f"\n✅ Target set: {target.name} on {DAY_NAMES[target.day_of_week]} at {target.time}")
 
-    # Test login
+    # Test login with debug
     print("\nTesting login...")
+
+    # Debug: Raw login to see response structure
+    debug_response = requests.post(
+        f"{BASE_URL}/user/login",
+        json={"email": config.email, "password": config.password},
+        headers=DEFAULT_HEADERS,
+    )
+    print(f"   Response status: {debug_response.status_code}")
+    print(f"   Response headers with 'token': {[(k,v[:30]+'...') for k,v in debug_response.headers.items() if 'token' in k.lower()]}")
+    debug_data = debug_response.json()
+    print(f"   Response keys: {debug_data.keys()}")
+    if "data" in debug_data and isinstance(debug_data["data"], dict):
+        print(f"   data keys: {debug_data['data'].keys()}")
+
     client = ArboxClient(config.email, config.password)
     if not client.login():
         print("❌ Login failed! Check your credentials.")
         return
     print("✅ Login successful!")
+    print(f"   Token: {client.access_token[:20]}..." if client.access_token else "   Token: None")
 
     # Fetch schedule
     print("\nFetching schedule...")
