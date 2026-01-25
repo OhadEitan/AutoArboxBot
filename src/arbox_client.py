@@ -109,7 +109,7 @@ class ArboxClient:
 
             # Try to extract tokens from response body first
             if "data" in data:
-                self.access_token = data["data"].get("accessToken") or data["data"].get("accesstoken")
+                self.access_token = data["data"].get("token") or data["data"].get("accessToken") or data["data"].get("accesstoken")
                 self.refresh_token = data["data"].get("refreshToken") or data["data"].get("refreshtoken")
 
             # Also check response headers (Arbox sends tokens there)
