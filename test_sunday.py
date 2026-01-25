@@ -81,30 +81,41 @@ def main():
     print("\nFetching schedule...")
     now = datetime.now()
 
-    # Debug: Raw schedule fetch to see response structure
-    debug_sched = requests.post(
-        f"{BASE_URL}/schedule/weekly",
-        json={
-            "from": now.strftime("%Y-%m-%dT00:00:00.000Z"),
-            "to": (now + timedelta(days=10)).strftime("%Y-%m-%dT23:59:59.999Z"),
-            "locations_box_id": config.locations_box_id,
-        },
-        headers={**DEFAULT_HEADERS, "accesstoken": client.access_token, "refreshtoken": client.refresh_token or ""},
-    )
-    print(f"   Schedule response status: {debug_sched.status_code}")
-    sched_data = debug_sched.json()
-    print(f"   Response type: {type(sched_data)}")
-    if isinstance(sched_data, list):
-        print(f"   List length: {len(sched_data)}")
-        if len(sched_data) > 0:
-            first = sched_data[0]
-            print(f"   First item type: {type(first)}")
-            print(f"   First item: {first[:100] if isinstance(first, str) else first}")
-    elif isinstance(sched_data, dict):
-        print(f"   Dict keys: {sched_data.keys()}")
-        # Maybe the dates are keys
-        for key in list(sched_data.keys())[:3]:
-            print(f"   Key '{key}' value type: {type(sched_data[key])}")
+    # Try different schedule endpoints
+    auth_headers = {**DEFAULT_HEADERS, "accesstoken": client.access_token, "refreshtoken": client.refresh_token or ""}
+
+    # Try 1: /schedule/date (common pattern)
+    endpoints_to_try = [
+        ("POST", "/schedule", {"from": now.strftime("%Y-%m-%d"), "to": (now + timedelta(days=10)).strftime("%Y-%m-%d"), "locations_box_id": config.locations_box_id}),
+        ("POST", "/schedule/byDate", {"date": now.strftime("%Y-%m-%d"), "locations_box_id": config.locations_box_id}),
+        ("POST", "/schedule/list", {"from": now.strftime("%Y-%m-%d"), "to": (now + timedelta(days=10)).strftime("%Y-%m-%d"), "locations_box_id": config.locations_box_id}),
+        ("GET", f"/schedule?from={now.strftime('%Y-%m-%d')}&to={(now + timedelta(days=10)).strftime('%Y-%m-%d')}&locations_box_id={config.locations_box_id}", None),
+    ]
+
+    for method, endpoint, payload in endpoints_to_try:
+        url = f"{BASE_URL}{endpoint}" if not endpoint.startswith("http") else endpoint
+        print(f"\n   Trying {method} {endpoint}...")
+        try:
+            if method == "POST":
+                resp = requests.post(url, json=payload, headers=auth_headers)
+            else:
+                resp = requests.get(url, headers=auth_headers)
+            print(f"   Status: {resp.status_code}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    print(f"   ✓ Found sessions! Keys: {data[0].keys()}")
+                    break
+                elif isinstance(data, dict) and "data" in data:
+                    inner = data["data"]
+                    if isinstance(inner, list) and len(inner) > 0 and isinstance(inner[0], dict):
+                        print(f"   ✓ Found sessions in data! Keys: {inner[0].keys()}")
+                        break
+                    print(f"   Data type: {type(inner)}, len: {len(inner) if hasattr(inner, '__len__') else 'N/A'}")
+                else:
+                    print(f"   Response type: {type(data)}")
+        except Exception as e:
+            print(f"   Error: {e}")
 
     sessions = client.get_schedule(
         from_date=now,
