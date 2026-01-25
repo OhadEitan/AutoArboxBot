@@ -97,9 +97,14 @@ def main():
     if isinstance(sched_data, list):
         print(f"   List length: {len(sched_data)}")
         if len(sched_data) > 0:
-            print(f"   First item keys: {sched_data[0].keys() if isinstance(sched_data[0], dict) else type(sched_data[0])}")
+            first = sched_data[0]
+            print(f"   First item type: {type(first)}")
+            print(f"   First item: {first[:100] if isinstance(first, str) else first}")
     elif isinstance(sched_data, dict):
         print(f"   Dict keys: {sched_data.keys()}")
+        # Maybe the dates are keys
+        for key in list(sched_data.keys())[:3]:
+            print(f"   Key '{key}' value type: {type(sched_data[key])}")
 
     sessions = client.get_schedule(
         from_date=now,
