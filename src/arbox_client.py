@@ -137,16 +137,18 @@ class ArboxClient:
         from_date: datetime,
         to_date: datetime,
         locations_box_id: int = 14,
+        boxes_id: int = 35,
     ) -> list[Session]:
         """
         Fetch schedule for a date range.
         Returns list of Session objects.
         """
-        url = f"{BASE_URL}/schedule/weekly"
+        url = f"{BASE_URL}/schedule/betweenDates"
         payload = {
             "from": from_date.strftime("%Y-%m-%dT00:00:00.000Z"),
-            "to": to_date.strftime("%Y-%m-%dT23:59:59.999Z"),
+            "to": to_date.strftime("%Y-%m-%dT00:00:00.000Z"),
             "locations_box_id": locations_box_id,
+            "boxes_id": boxes_id,
         }
 
         try:
