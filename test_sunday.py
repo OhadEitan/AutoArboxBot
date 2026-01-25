@@ -129,14 +129,38 @@ def main():
 
     if not sunday_21:
         print("No Sunday 21:00 CrossFit sessions found in the next 10 days.")
+        return
+
+    # Find the next session that can be registered
+    for s in sunday_21:
+        if s.is_registered:
+            print(f"\n✅ Already registered for {s.date}!")
+            continue
+
+        if s.can_register:
+            print(f"\n🎯 Registering for {s.date} {s.time}...")
+            result = client.register(s.id, config.membership_user_id)
+            if result.success:
+                print(f"✅ SUCCESS! Registered for {s.date} at {s.time}")
+                print(f"   Session ID: {s.id}")
+            else:
+                print(f"❌ Failed: {result.message}")
+            break
+        elif s.can_join_waitlist:
+            print(f"\n🎯 Class full, joining waitlist for {s.date}...")
+            result = client.join_waitlist(s.id, config.membership_user_id)
+            if result.success:
+                print(f"✅ Joined waitlist for {s.date} at {s.time}")
+            else:
+                print(f"❌ Failed: {result.message}")
+            break
+        elif not s.is_past:
+            print(f"\n⏳ Registration not open yet for {s.date}")
+            print(f"   Opens at: {s.registration_opens_at}")
 
     print("\n" + "="*50)
-    print("TEST COMPLETE")
+    print("DONE")
     print("="*50)
-    print("\nTo run the bot continuously:")
-    print("  python run.py run")
-    print("\nThe bot will automatically register for Sunday 21:00 CrossFit")
-    print("when the 72-hour registration window opens.")
 
 if __name__ == "__main__":
     main()
