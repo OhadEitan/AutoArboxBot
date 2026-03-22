@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Check rules and register for classes when trigger time matches.
-Runs via GitHub Actions hourly.
+Check rules and register for classes within 72 hours.
+Runs via GitHub Actions hourly — tries to register for any class
+whose next occurrence is within 72 hours.
 """
 
 import json
@@ -82,15 +83,22 @@ def get_current_time():
     return datetime.now(ISRAEL_TZ)
 
 
-def should_trigger_rule(rule, now):
-    # Convert Python weekday (0=Mon) to our format (0=Sun)
-    today = (now.weekday() + 1) % 7
+def next_occurrence(target_day, target_time, now):
+    """Calculate the next occurrence of a class given day (0=Sun) and time (HH:MM)."""
+    hh, mm = map(int, target_time.split(":"))
+    today = (now.weekday() + 1) % 7  # 0=Sun
+    days_ahead = (target_day - today + 7) % 7
+    candidate = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(days=days_ahead)
+    if candidate <= now:
+        candidate += timedelta(days=7)
+    return candidate
 
-    if rule["trigger_day"] != today:
-        return False
 
-    trigger_hour = int(rule["trigger_time"].split(":")[0])
-    return now.hour == trigger_hour
+def should_try_register(rule, now):
+    """Try to register if the class is within 72 hours from now."""
+    target = next_occurrence(rule["target_day"], rule["target_time"], now)
+    hours_until = (target - now).total_seconds() / 3600
+    return hours_until <= 72
 
 
 # ── Email ────────────────────────────────────────────────────────────
@@ -230,7 +238,7 @@ def main():
     for rule in rules:
         if not rule.get("enabled", True):
             continue
-        if not should_trigger_rule(rule, now):
+        if not should_try_register(rule, now):
             continue
 
         triggered_count += 1
