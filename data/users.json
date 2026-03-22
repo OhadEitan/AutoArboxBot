@@ -1,3 +1,9 @@
 {
-  "users": {}
+  "users": {
+    "ohad": {
+      "name": "Ohad",
+      "notification_email": "eitanohad@gmail.com",
+      "locations_box_id": 14
+    }
+  }
 }
