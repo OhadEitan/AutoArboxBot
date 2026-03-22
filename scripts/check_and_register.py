@@ -104,10 +104,11 @@ def should_try_register(rule, now):
 # ── Email ────────────────────────────────────────────────────────────
 
 def send_email(to_email, subject, body):
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    smtp_port_str = os.environ.get("SMTP_PORT", "587").strip()
+    smtp_port = int(smtp_port_str) if smtp_port_str else 587
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASS", "").strip()
 
     if not all([smtp_host, smtp_user, smtp_pass]):
         print(f"   (SMTP not configured, skipping email to {to_email})")
