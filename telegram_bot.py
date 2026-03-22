@@ -382,6 +382,24 @@ async def setup_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== Add Rule (Simple) ====================
 
+def get_next_rule_number(telegram_id: int) -> int:
+    """Get the next rule number for a user (1, 2, 3, etc.)"""
+    rules = get_user_rules(telegram_id)
+    if not rules:
+        return 1
+    # Find highest existing number
+    max_num = 0
+    for rule in rules:
+        name = rule.get("name", "")
+        if name.startswith("Rule "):
+            try:
+                num = int(name.split(" ")[1])
+                max_num = max(max_num, num)
+            except:
+                pass
+    return max_num + 1
+
+
 async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Simple add command: /add <day> <time>
@@ -450,14 +468,17 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     trigger_day = (target_day - 3) % 7
     trigger_time = f"{time_input}:00"
     
+    # Get next rule number for this user
+    rule_num = get_next_rule_number(user_id)
+    
     # Create rule
     import uuid
     rule = {
         "id": str(uuid.uuid4())[:8],
-        "name": f"{DAY_NAMES[target_day]} {time_input}",
+        "name": f"Rule {rule_num}",
         "trigger_day": trigger_day,
         "trigger_time": trigger_time,
-        "target_class": "CrossFit",  # Default to CrossFit
+        "target_class": "CrossFit",
         "target_day": target_day,
         "target_time": time_input,
         "enabled": True,
@@ -465,29 +486,39 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     add_user_rule(user_id, rule)
     
-    # Check if class is within the next 7 days and try to register now
+    # Calculate hours until class
     now = datetime.now(ISRAEL_TZ)
-    today = now.weekday()  # Python: 0=Monday, but we use 0=Sunday
-    # Convert Python weekday to our format (0=Sunday)
-    today_our_format = (today + 1) % 7
     
-    # Calculate days until target class
-    days_until_class = (target_day - today_our_format) % 7
-    if days_until_class == 0:
-        # Check if class time already passed today
-        class_hour, class_min = map(int, time_input.split(":"))
-        if now.hour > class_hour or (now.hour == class_hour and now.minute >= class_min):
-            days_until_class = 7  # Next week
+    # Our day format: 0=Sunday, 1=Monday, etc.
+    # Python weekday(): 0=Monday, 1=Tuesday, etc.
+    # Convert: Python Monday(0) = Our Monday(1), Python Sunday(6) = Our Sunday(0)
+    python_weekday = now.weekday()  # 0=Mon, 6=Sun
+    today_our_format = (python_weekday + 1) % 7  # Convert to 0=Sun, 1=Mon, etc.
     
-    # If class is within 72 hours (3 days), try to register now
-    hours_until_class = days_until_class * 24 + (int(time_input.split(":")[0]) - now.hour)
+    # Days until target
+    days_until = (target_day - today_our_format) % 7
     
-    if hours_until_class <= 72 and hours_until_class > 0:
+    # Build target datetime
+    class_hour, class_min = map(int, time_input.split(":"))
+    target_datetime = now.replace(hour=class_hour, minute=class_min, second=0, microsecond=0)
+    target_datetime = target_datetime + timedelta(days=days_until)
+    
+    # If target is in the past (earlier today), add 7 days
+    if target_datetime <= now:
+        target_datetime = target_datetime + timedelta(days=7)
+        days_until = 7
+    
+    hours_until = (target_datetime - now).total_seconds() / 3600
+    
+    logger.info(f"Add rule: target_day={target_day}, today={today_our_format}, days_until={days_until}, hours_until={hours_until:.1f}")
+    
+    # If class is within 72 hours, try to register now
+    if hours_until <= 72:
         await update.message.reply_text(
-            f"✅ *Rule created!*\n\n"
-            f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
-            f"⏰ Weekly trigger: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
-            f"🔄 Class is in ~{hours_until_class}h - trying to register now...",
+            f"✅ *Rule {rule_num} created!*\n\n"
+            f"📅 Class: CrossFit {DAY_NAMES[target_day]} {time_input}\n"
+            f"⏰ Weekly: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
+            f"🔄 Class is in {hours_until:.0f}h - registering now...",
             parse_mode="Markdown",
         )
         
@@ -495,10 +526,9 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await try_register_now(user_id, user, rule)
     else:
         await update.message.reply_text(
-            f"✅ *Rule created!*\n\n"
-            f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
+            f"✅ *Rule {rule_num} created!*\n\n"
+            f"📅 Class: CrossFit {DAY_NAMES[target_day]} {time_input}\n"
             f"⏰ Auto-register: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
-            f"ID: `{rule['id']}`\n\n"
             f"_Runs every week, 72h before class._",
             parse_mode="Markdown",
         )
