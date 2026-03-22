@@ -388,10 +388,12 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Example: /add Wednesday 18:00
     
     Bot automatically calculates trigger time (72 hours before).
+    If class is within 72 hours, tries to register immediately.
     """
     user_id = update.effective_user.id
+    user = get_user(user_id)
     
-    if not get_user(user_id):
+    if not user:
         await update.message.reply_text("❌ Use /setup first.")
         return
     
@@ -404,7 +406,8 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/add Wednesday 18:00`\n"
             "`/add Sun 09:00`\n"
             "`/add Thu 20:00`\n\n"
-            "The bot will auto-register 72h before the class.",
+            "The bot will auto-register 72h before the class.\n"
+            "If class is sooner, it registers immediately!",
             parse_mode="Markdown",
         )
         return
@@ -462,16 +465,113 @@ async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     add_user_rule(user_id, rule)
     
-    await update.message.reply_text(
-        f"✅ *Rule created!*\n\n"
-        f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
-        f"⏰ Auto-register: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
-        f"ID: `{rule['id']}`\n\n"
-        f"_The bot will register you 72h before the class._",
-        parse_mode="Markdown",
-    )
+    # Check if class is within the next 7 days and try to register now
+    now = datetime.now(ISRAEL_TZ)
+    today = now.weekday()  # Python: 0=Monday, but we use 0=Sunday
+    # Convert Python weekday to our format (0=Sunday)
+    today_our_format = (today + 1) % 7
+    
+    # Calculate days until target class
+    days_until_class = (target_day - today_our_format) % 7
+    if days_until_class == 0:
+        # Check if class time already passed today
+        class_hour, class_min = map(int, time_input.split(":"))
+        if now.hour > class_hour or (now.hour == class_hour and now.minute >= class_min):
+            days_until_class = 7  # Next week
+    
+    # If class is within 72 hours (3 days), try to register now
+    hours_until_class = days_until_class * 24 + (int(time_input.split(":")[0]) - now.hour)
+    
+    if hours_until_class <= 72 and hours_until_class > 0:
+        await update.message.reply_text(
+            f"✅ *Rule created!*\n\n"
+            f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
+            f"⏰ Weekly trigger: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
+            f"🔄 Class is in ~{hours_until_class}h - trying to register now...",
+            parse_mode="Markdown",
+        )
+        
+        # Try to register immediately
+        await try_register_now(user_id, user, rule)
+    else:
+        await update.message.reply_text(
+            f"✅ *Rule created!*\n\n"
+            f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
+            f"⏰ Auto-register: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
+            f"ID: `{rule['id']}`\n\n"
+            f"_Runs every week, 72h before class._",
+            parse_mode="Markdown",
+        )
     
     await schedule_all_rules()
+
+
+async def try_register_now(telegram_id: int, user: dict, rule: dict):
+    """Try to register for a class immediately."""
+    
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await notify_user(telegram_id, f"❌ Login failed. Check /setup")
+        return
+    
+    # Find the target session
+    now = datetime.now(ISRAEL_TZ)
+    sessions = client.get_schedule(
+        from_date=now,
+        to_date=now + timedelta(days=7),
+        locations_box_id=user.get("locations_box_id", 14),
+    )
+    
+    target = None
+    for s in sessions:
+        if (
+            s.name.lower() == rule["target_class"].lower()
+            and s.day_of_week == rule["target_day"]
+            and s.time == rule["target_time"]
+            and not s.is_past
+        ):
+            target = s
+            break
+    
+    if not target:
+        await notify_user(telegram_id, f"⚠️ Session not found yet. Will try at scheduled time.")
+        return
+    
+    # Already registered?
+    if target.is_registered:
+        await notify_user(telegram_id, f"✅ Already registered for {target.date} {target.time}!")
+        return
+    
+    # Try to register
+    if target.can_register:
+        reg = client.register(target.id, user["membership_id"])
+        if reg.success:
+            await notify_user(
+                telegram_id,
+                f"🎉 *Registered!*\n\n"
+                f"CrossFit {target.date} {target.time}\n"
+                f"({target.free} spots were available)"
+            )
+        else:
+            await notify_user(telegram_id, f"❌ Registration failed: {reg.message}")
+    
+    elif target.can_join_waitlist:
+        reg = client.join_waitlist(target.id, user["membership_id"])
+        if reg.success:
+            await notify_user(
+                telegram_id,
+                f"📋 *Joined waitlist*\n\n"
+                f"CrossFit {target.date} {target.time}"
+            )
+        else:
+            await notify_user(telegram_id, f"❌ Waitlist failed: {reg.message}")
+    
+    else:
+        await notify_user(
+            telegram_id, 
+            f"⏳ Registration not open yet.\n"
+            f"Will auto-register at {DAY_NAMES[rule['trigger_day']]} {rule['trigger_time']}"
+        )
 
 
 # ==================== Scheduler ====================
