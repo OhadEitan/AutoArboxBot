@@ -1,5 +1,5 @@
 name: Auto Register
-
+# Runs hourly, registers for classes within 72h
 on:
   schedule:
     - cron: "0 * * * *"
