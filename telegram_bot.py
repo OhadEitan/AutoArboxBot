@@ -39,15 +39,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
-DATA_DIR = Path.home() / ".autoarboxbot"
+
+# Data storage - use /data on Render (persistent disk) or local folder
+DATA_DIR = Path(os.getenv("DATA_DIR", str(Path.home() / ".autoarboxbot")))
 USERS_FILE = DATA_DIR / "users.json"
 RULES_FILE = DATA_DIR / "rules.json"
 
-# Bot token - CHANGE THIS!
-BOT_TOKEN = "8604292375:AAHtzV5-pC0w-sOPJl22AFI8MQ8GQh2SXtg"
-
-# Admin user ID (your Telegram ID) - CHANGE THIS!
-ADMIN_ID = None  # Set this to your Telegram user ID
+# Bot token from environment variable
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -166,21 +165,18 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 *AutoArboxBot Help*\n\n"
         "*Setup:*\n"
-        "/setup - Set your Arbox credentials\n\n"
+        "`/setup` - Set your Arbox credentials\n\n"
         "*Rules:*\n"
-        "/add - Add a registration rule\n"
-        "/rules - List your rules\n"
-        "/toggle <id> - Enable/disable rule\n"
-        "/remove <id> - Delete rule\n\n"
+        "`/add Wed 18:00` - Add a workout\n"
+        "`/rules` - List your rules\n"
+        "`/toggle <id>` - Enable/disable rule\n"
+        "`/remove <id>` - Delete rule\n\n"
         "*Other:*\n"
-        "/test - Test Arbox connection\n"
-        "/status - Your status\n\n"
-        "*How rules work:*\n"
-        "A rule = WHEN to register + WHAT to register for\n\n"
-        "Example:\n"
-        "Trigger: Sunday 18:00:00\n"
-        "Target: CrossFit Wednesday 18:00\n\n"
-        "→ At Sunday 18:00 the bot registers you for Wednesday's class.",
+        "`/test` - Test Arbox connection\n"
+        "`/status` - Your status\n\n"
+        "*Example:*\n"
+        "`/add Wednesday 18:00`\n"
+        "→ Bot registers you 72h before (Sunday 18:00)",
         parse_mode="Markdown",
     )
 
@@ -384,186 +380,99 @@ async def setup_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Setup cancelled.")
     return ConversationHandler.END
 
-# ==================== Add Rule Conversation ====================
+# ==================== Add Rule (Simple) ====================
 
-async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Simple add command: /add <day> <time>
+    Example: /add Wednesday 18:00
+    
+    Bot automatically calculates trigger time (72 hours before).
+    """
     user_id = update.effective_user.id
     
     if not get_user(user_id):
         await update.message.reply_text("❌ Use /setup first.")
-        return ConversationHandler.END
+        return
     
-    temp_data[user_id] = {}
-    await update.message.reply_text(
-        "➕ *Add New Rule*\n\nGive this rule a name (e.g., 'Wednesday Evening'):",
-        parse_mode="Markdown",
-    )
-    return ADD_NAME
-
-async def add_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    temp_data[user_id]["name"] = update.message.text.strip()
+    # Parse arguments
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "📝 *Add a workout*\n\n"
+            "Usage: `/add <day> <time>`\n\n"
+            "Examples:\n"
+            "`/add Wednesday 18:00`\n"
+            "`/add Sun 09:00`\n"
+            "`/add Thu 20:00`\n\n"
+            "The bot will auto-register 72h before the class.",
+            parse_mode="Markdown",
+        )
+        return
     
-    keyboard = [
-        [InlineKeyboardButton(day, callback_data=f"tday_{i}") for i, day in enumerate(DAY_NAMES[:4])],
-        [InlineKeyboardButton(day, callback_data=f"tday_{i}") for i, day in enumerate(DAY_NAMES[4:], 4)],
-    ]
+    day_input = context.args[0].lower()
+    time_input = context.args[1]
     
-    await update.message.reply_text(
-        "📅 *Trigger Day*\n\nWhen should the bot register you?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-    return ADD_TRIGGER_DAY
-
-async def add_trigger_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    # Parse day
+    day_map = {
+        "sun": 0, "sunday": 0, "ראשון": 0,
+        "mon": 1, "monday": 1, "שני": 1,
+        "tue": 2, "tuesday": 2, "שלישי": 2,
+        "wed": 3, "wednesday": 3, "רביעי": 3,
+        "thu": 4, "thursday": 4, "חמישי": 4,
+        "fri": 5, "friday": 5, "שישי": 5,
+        "sat": 6, "saturday": 6, "שבת": 6,
+    }
     
-    user_id = update.effective_user.id
-    day = int(query.data.split("_")[1])
-    temp_data[user_id]["trigger_day"] = day
+    target_day = day_map.get(day_input)
+    if target_day is None:
+        await update.message.reply_text(
+            f"❌ Unknown day: `{day_input}`\n\n"
+            "Use: Sun, Mon, Tue, Wed, Thu, Fri, Sat",
+            parse_mode="Markdown",
+        )
+        return
     
-    await query.edit_message_text(
-        f"📅 Trigger: *{DAY_NAMES[day]}*\n\n"
-        "⏰ Enter trigger time (HH:MM:SS):\n"
-        "Example: `18:00:00`",
-        parse_mode="Markdown",
-    )
-    return ADD_TRIGGER_TIME
-
-async def add_trigger_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    time_str = update.message.text.strip()
-    
-    # Add seconds if missing
-    if len(time_str.split(":")) == 2:
-        time_str += ":00"
-    
+    # Parse time
     try:
-        datetime.strptime(time_str, "%H:%M:%S")
+        datetime.strptime(time_input, "%H:%M")
     except ValueError:
-        await update.message.reply_text("❌ Invalid format. Use HH:MM:SS (e.g., 18:00:00)")
-        return ADD_TRIGGER_TIME
+        await update.message.reply_text(
+            f"❌ Invalid time: `{time_input}`\n\n"
+            "Use format: HH:MM (e.g., 18:00)",
+            parse_mode="Markdown",
+        )
+        return
     
-    temp_data[user_id]["trigger_time"] = time_str
-    
-    await update.message.reply_text(
-        "🏋️ *Target Class*\n\nWhat class to register for?\n"
-        "Example: `CrossFit`",
-        parse_mode="Markdown",
-    )
-    return ADD_TARGET_CLASS
-
-async def add_target_class(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    temp_data[user_id]["target_class"] = update.message.text.strip()
-    
-    keyboard = [
-        [InlineKeyboardButton(day, callback_data=f"xday_{i}") for i, day in enumerate(DAY_NAMES[:4])],
-        [InlineKeyboardButton(day, callback_data=f"xday_{i}") for i, day in enumerate(DAY_NAMES[4:], 4)],
-    ]
-    
-    await update.message.reply_text(
-        "📅 *Target Day*\n\nWhat day is the class?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-    return ADD_TARGET_DAY
-
-async def add_target_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    day = int(query.data.split("_")[1])
-    temp_data[user_id]["target_day"] = day
-    
-    await query.edit_message_text(
-        f"📅 Target: *{DAY_NAMES[day]}*\n\n"
-        "⏰ Enter class time (HH:MM):\n"
-        "Example: `18:00`",
-        parse_mode="Markdown",
-    )
-    return ADD_TARGET_TIME
-
-async def add_target_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    time_str = update.message.text.strip()
-    
-    try:
-        datetime.strptime(time_str, "%H:%M")
-    except ValueError:
-        await update.message.reply_text("❌ Invalid format. Use HH:MM (e.g., 18:00)")
-        return ADD_TARGET_TIME
-    
-    temp_data[user_id]["target_time"] = time_str
-    
-    data = temp_data[user_id]
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Confirm", callback_data="confirm_yes"),
-            InlineKeyboardButton("❌ Cancel", callback_data="confirm_no"),
-        ]
-    ]
-    
-    await update.message.reply_text(
-        "📋 *Confirm Rule*\n\n"
-        f"*Name:* {data['name']}\n"
-        f"*Trigger:* {DAY_NAMES[data['trigger_day']]} {data['trigger_time']}\n"
-        f"*Target:* {data['target_class']} {DAY_NAMES[data['target_day']]} {data['target_time']}\n\n"
-        "Is this correct?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-    return ADD_CONFIRM
-
-async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    
-    if query.data == "confirm_no":
-        del temp_data[user_id]
-        await query.edit_message_text("❌ Cancelled.")
-        return ConversationHandler.END
-    
-    data = temp_data[user_id]
+    # Calculate trigger day (72 hours = 3 days before)
+    trigger_day = (target_day - 3) % 7
+    trigger_time = f"{time_input}:00"
     
     # Create rule
     import uuid
     rule = {
         "id": str(uuid.uuid4())[:8],
-        "name": data["name"],
-        "trigger_day": data["trigger_day"],
-        "trigger_time": data["trigger_time"],
-        "target_class": data["target_class"],
-        "target_day": data["target_day"],
-        "target_time": data["target_time"],
+        "name": f"{DAY_NAMES[target_day]} {time_input}",
+        "trigger_day": trigger_day,
+        "trigger_time": trigger_time,
+        "target_class": "CrossFit",  # Default to CrossFit
+        "target_day": target_day,
+        "target_time": time_input,
         "enabled": True,
     }
     
     add_user_rule(user_id, rule)
-    del temp_data[user_id]
     
-    await query.edit_message_text(
+    await update.message.reply_text(
         f"✅ *Rule created!*\n\n"
-        f"ID: `{rule['id']}`\n"
-        f"{DAY_NAMES[rule['trigger_day']]} {rule['trigger_time']} → "
-        f"{rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}",
+        f"📅 Class: *CrossFit {DAY_NAMES[target_day]} {time_input}*\n"
+        f"⏰ Auto-register: {DAY_NAMES[trigger_day]} {trigger_time}\n\n"
+        f"ID: `{rule['id']}`\n\n"
+        f"_The bot will register you 72h before the class._",
         parse_mode="Markdown",
     )
     
     await schedule_all_rules()
-    return ConversationHandler.END
 
-async def add_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in temp_data:
-        del temp_data[user_id]
-    await update.message.reply_text("❌ Cancelled.")
-    return ConversationHandler.END
 
 # ==================== Scheduler ====================
 
@@ -719,11 +628,47 @@ async def post_init(application: Application):
 
 # ==================== Main ====================
 
+# Simple web server to keep Render free tier happy
+from threading import Thread
+import http.server
+import socketserver
+
+def run_health_server():
+    """Run a simple HTTP server for Render health checks."""
+    port = int(os.getenv("PORT", 10000))
+    
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"AutoArboxBot is running!")
+        
+        def log_message(self, format, *args):
+            pass  # Suppress logs
+    
+    with socketserver.TCPServer(("", port), Handler) as httpd:
+        logger.info(f"Health server running on port {port}")
+        httpd.serve_forever()
+
 def main():
     global app
     
+    # Check for bot token
+    if not BOT_TOKEN:
+        print("❌ Error: TELEGRAM_BOT_TOKEN environment variable not set!")
+        print("Set it in Render dashboard or .env file")
+        sys.exit(1)
+    
     print("🤖 AutoArboxBot starting...")
     print(f"📁 Data directory: {DATA_DIR}")
+    
+    # Ensure data directory exists
+    ensure_data_dir()
+    
+    # Start health check server in background (for Render free tier)
+    health_thread = Thread(target=run_health_server, daemon=True)
+    health_thread.start()
     
     # Build app
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
@@ -749,24 +694,11 @@ def main():
     )
     app.add_handler(setup_handler)
     
-    # Add rule conversation
-    add_handler = ConversationHandler(
-        entry_points=[CommandHandler("add", add_start)],
-        states={
-            ADD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_name)],
-            ADD_TRIGGER_DAY: [CallbackQueryHandler(add_trigger_day, pattern="^tday_")],
-            ADD_TRIGGER_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_trigger_time)],
-            ADD_TARGET_CLASS: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_target_class)],
-            ADD_TARGET_DAY: [CallbackQueryHandler(add_target_day, pattern="^xday_")],
-            ADD_TARGET_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_target_time)],
-            ADD_CONFIRM: [CallbackQueryHandler(add_confirm, pattern="^confirm_")],
-        },
-        fallbacks=[CommandHandler("cancel", add_cancel)],
-    )
-    app.add_handler(add_handler)
+    # Simple add command (no conversation needed)
+    app.add_handler(CommandHandler("add", cmd_add))
     
     # Run
-    print("✅ Bot is running! Press Ctrl+C to stop.")
+    print("✅ Bot is running!")
     app.run_polling()
 
 if __name__ == "__main__":
