@@ -1,3 +1,17 @@
 {
-  "rules": []
+  "rules": [
+    {
+      "user_id": "ohad",
+      "name": "CrossFit Wed 18:00",
+      "target_class": "CrossFit",
+      "target_day": 3,
+      "target_time": "18:00",
+      "repeat": "weekly",
+      "id": "331f3d02-9a48-4a8c-aa22-1298e833e97c",
+      "trigger_day": 0,
+      "trigger_time": "18:00:00",
+      "enabled": true,
+      "created_at": "2026-03-22T16:20:21.529Z"
+    }
+  ]
 }
