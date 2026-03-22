@@ -85,20 +85,11 @@
     <p style="text-align:center;color:#888;font-size:13px;margin-bottom:20px">Configure your auto-registration bot</p>
 
     <div class="card">
-        <h3 style="margin-bottom:12px">Your Info</h3>
-        <div class="form-group"><label>Display Name</label><input id="s_name" placeholder="e.g. Ohad"></div>
-        <div class="form-group"><label>User ID (short, no spaces)</label><input id="s_userId" placeholder="e.g. ohad"></div>
+        <div class="form-group"><label>Name</label><input id="s_name" placeholder="e.g. Ohad"></div>
         <div class="form-group"><label>Arbox Email</label><input id="s_email" type="email" placeholder="you@example.com"></div>
         <div class="form-group"><label>Arbox Password</label><input id="s_password" type="password"><small>Stored only in the Cloudflare Worker, never in GitHub</small></div>
-        <div class="form-group"><label>Membership ID</label><input id="s_membership" type="number" placeholder="e.g. 123456"></div>
-        <div class="form-group"><label>Box ID</label><input id="s_boxId" type="number" value="14"></div>
-        <div class="form-group"><label>Notification Email</label><input id="s_notifEmail" type="email" placeholder="your@email.com"></div>
-    </div>
-
-    <div class="card">
-        <h3 style="margin-bottom:12px">Worker Connection</h3>
-        <div class="form-group"><label>Worker URL</label><input id="s_workerUrl" placeholder="https://autoarboxbot.YOUR.workers.dev"></div>
-        <div class="form-group"><label>Worker Key</label><input id="s_workerKey" type="password" placeholder="secret key"></div>
+        <div class="form-group"><label>Membership ID</label><input id="s_membership" type="number" placeholder="e.g. 7751132"></div>
+        <div class="form-group"><label>Worker Key</label><input id="s_workerKey" type="password" placeholder="Ask admin for the key"></div>
     </div>
 
     <button class="btn btn-primary" onclick="submitSetup()">Save &amp; Start</button>
@@ -255,17 +246,15 @@ async function submitSetup() {
     errEl.textContent = '';
 
     const name = document.getElementById('s_name').value.trim();
-    const userId = document.getElementById('s_userId').value.trim().toLowerCase().replace(/\s+/g, '');
+    const userId = name.toLowerCase().replace(/\s+/g, '');
     const email = document.getElementById('s_email').value.trim();
     const password = document.getElementById('s_password').value;
     const membership = document.getElementById('s_membership').value.trim();
-    const boxId = document.getElementById('s_boxId').value.trim();
-    const notifEmail = document.getElementById('s_notifEmail').value.trim();
-    const workerUrl = document.getElementById('s_workerUrl').value.trim();
     const workerKey = document.getElementById('s_workerKey').value.trim();
+    const workerUrl = 'https://autoarboxbot.ohadarbox.workers.dev';
 
-    if (!name || !userId || !email || !password || !membership || !workerUrl || !workerKey) {
-        errEl.textContent = 'Please fill in all required fields.';
+    if (!name || !email || !password || !membership || !workerKey) {
+        errEl.textContent = 'Please fill in all fields.';
         return;
     }
 
@@ -275,8 +264,8 @@ async function submitSetup() {
         await api('POST', '/users', {
             user_id: userId, name, email, password,
             membership_id: Number(membership),
-            locations_box_id: Number(boxId) || 14,
-            notification_email: notifEmail,
+            locations_box_id: 14,
+            notification_email: email,
         });
 
         localStorage.setItem('arbox_userId', userId);
