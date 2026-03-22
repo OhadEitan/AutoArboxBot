@@ -1,0 +1,40 @@
+name: Auto Register
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+
+    env:
+      WORKER_URL: ${{ secrets.WORKER_URL }}
+      WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run registration check
+        run: python scripts/check_and_register.py
+
+      - name: Commit data changes
+        run: |
+          git config user.name "AutoArboxBot"
+          git config user.email "bot@autoarbox.dev"
+          git add data/rules.json data/classes.json
+          git diff --cached --quiet || git commit -m "Update rules and classes [skip ci]"
+          git push
