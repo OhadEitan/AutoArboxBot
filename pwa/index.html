@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AutoArbox">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="manifest" href="manifest.json">
+    <title>AutoArbox</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+            padding-top: env(safe-area-inset-top, 20px);
+            padding-bottom: 100px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .card {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: #0f3460;
+        }
+        
+        .btn-danger {
+            background: #c0392b;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 16px;
+        }
+        
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        
+        .rule-item {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .rule-item .info {
+            flex: 1;
+        }
+        
+        .rule-item .name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .rule-item .details {
+            font-size: 13px;
+            color: #888;
+        }
+        
+        .rule-item .delete-btn {
+            background: #c0392b;
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+        .class-item {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .class-item .name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .class-item .details {
+            font-size: 13px;
+            color: #888;
+        }
+        
+        .tabs {
+            display: flex;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #16213e;
+            padding: 10px 20px;
+            padding-bottom: env(safe-area-inset-bottom, 10px);
+            border-top: 1px solid #0f3460;
+        }
+        
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            color: #888;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .tab.active {
+            color: #e94560;
+        }
+        
+        .tab-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        
+        .screen {
+            display: none;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .status.success { background: #27ae60; }
+        .status.error { background: #c0392b; }
+        .status.info { background: #0f3460; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="header">
+            <h1>🏋️ AutoArbox</h1>
+            <p>Auto-register for your gym classes</p>
+        </div>
+        
+        <div class="card">
+            <h2>👤 Login</h2>
+            <div class="input-group">
+                <label>Your User ID</label>
+                <input type="text" id="login-user-id" placeholder="Enter your user ID">
+            </div>
+            <button class="btn" onclick="login()">Login</button>
+            <button class="btn btn-secondary" onclick="showScreen('setup-screen')">New User? Setup</button>
+        </div>
+    </div>
+    
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="screen">
+        <div class="header">
+            <h1>🏋️ AutoArbox</h1>
+            <p>Setup your account</p>
+        </div>
+        
+        <div class="card">
+            <h2>⚙️ Setup</h2>
+            <div id="setup-status" class="status info hidden"></div>
+            
+            <div class="input-group">
+                <label>Your Name</label>
+                <input type="text" id="setup-name" placeholder="e.g., Ohad">
+            </div>
+            <div class="input-group">
+                <label>Arbox Email</label>
+                <input type="email" id="setup-email" placeholder="your@email.com">
+            </div>
+            <div class="input-group">
+                <label>Arbox Password</label>
+                <input type="password" id="setup-password" placeholder="Your Arbox password">
+            </div>
+            <div class="input-group">
+                <label>Membership ID</label>
+                <input type="number" id="setup-membership" placeholder="e.g., 7751132">
+            </div>
+            <div class="input-group">
+                <label>Notification Email</label>
+                <input type="email" id="setup-notification-email" placeholder="Where to send notifications">
+            </div>
+            <button class="btn" onclick="saveSetup()">Save & Continue</button>
+            <button class="btn btn-secondary" onclick="showScreen('login-screen')">Back to Login</button>
+        </div>
+    </div>
+    
+    <!-- Rules Screen -->
+    <div id="rules-screen" class="screen">
+        <div class="header">
+            <h1>📋 My Rules</h1>
+            <p>Auto-register for these classes</p>
+        </div>
+        
+        <div id="rules-list"></div>
+        
+        <div class="card">
+            <h2>➕ Add Rule</h2>
+            <div class="input-group">
+                <label>Day</label>
+                <select id="add-day">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Time</label>
+                <input type="time" id="add-time" value="18:00">
+            </div>
+            <button class="btn" onclick="addRule()">Add Rule</button>
+        </div>
+    </div>
+    
+    <!-- Classes Screen -->
+    <div id="classes-screen" class="screen">
+        <div class="header">
+            <h1>📅 My Classes</h1>
+            <p>Your registered classes</p>
+        </div>
+        
+        <div id="classes-list"></div>
+        
+        <button class="btn btn-secondary" onclick="refreshClasses()">🔄 Refresh</button>
+    </div>
+    
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen">
+        <div class="header">
+            <h1>⚙️ Settings</h1>
+        </div>
+        
+        <div class="card">
+            <h2>👤 Account</h2>
+            <p id="settings-info"></p>
+            <button class="btn btn-danger" onclick="logout()">Logout</button>
+        </div>
+    </div>
+    
+    <!-- Tab Bar -->
+    <div class="tabs" id="tab-bar" style="display: none;">
+        <div class="tab active" onclick="showTab('rules-screen')">
+            <div class="tab-icon">📋</div>
+            <div>Rules</div>
+        </div>
+        <div class="tab" onclick="showTab('classes-screen')">
+            <div class="tab-icon">📅</div>
+            <div>Classes</div>
+        </div>
+        <div class="tab" onclick="showTab('settings-screen')">
+            <div class="tab-icon">⚙️</div>
+            <div>Settings</div>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const GITHUB_REPO = 'OhadEitan/AutoArboxBot';
+        const GITHUB_BRANCH = 'main';
+        const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        // State
+        let currentUser = null;
+        let usersData = { users: {} };
+        let rulesData = { rules: [] };
+        let classesData = { classes: {} };
+        
+        // GitHub API helpers
+        async function fetchGitHubFile(path) {
+            const url = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
+            const response = await fetch(url + '?t=' + Date.now()); // Cache bust
+            if (!response.ok) throw new Error('File not found');
+            return response.json();
+        }
+        
+        async function loadData() {
+            try {
+                usersData = await fetchGitHubFile('data/users.json');
+                rulesData = await fetchGitHubFile('data/rules.json');
+                classesData = await fetchGitHubFile('data/classes.json');
+            } catch (e) {
+                console.error('Error loading data:', e);
+            }
+        }
+        
+        // Screen management
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            const showTabs = ['rules-screen', 'classes-screen', 'settings-screen'].includes(screenId);
+            document.getElementById('tab-bar').style.display = showTabs ? 'flex' : 'none';
+        }
+        
+        function showTab(screenId) {
+            showScreen(screenId);
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            if (screenId === 'rules-screen') renderRules();
+            if (screenId === 'classes-screen') renderClasses();
+            if (screenId === 'settings-screen') renderSettings();
+        }
+        
+        // Login
+        async function login() {
+            const userId = document.getElementById('login-user-id').value.trim();
+            if (!userId) {
+                alert('Please enter your user ID');
+                return;
+            }
+            
+            await loadData();
+            
+            if (!usersData.users[userId]) {
+                alert('User not found. Please setup first.');
+                return;
+            }
+            
+            currentUser = userId;
+            localStorage.setItem('userId', userId);
+            
+            showTab('rules-screen');
+            renderRules();
+        }
+        
+        // Auto-login
+        async function autoLogin() {
+            const savedUserId = localStorage.getItem('userId');
+            if (savedUserId) {
+                await loadData();
+                if (usersData.users[savedUserId]) {
+                    currentUser = savedUserId;
+                    showTab('rules-screen');
+                    renderRules();
+                    return;
+                }
+            }
+            showScreen('login-screen');
+        }
+        
+        // Setup
+        function saveSetup() {
+            const name = document.getElementById('setup-name').value.trim();
+            const email = document.getElementById('setup-email').value.trim();
+            const password = document.getElementById('setup-password').value;
+            const membership = document.getElementById('setup-membership').value.trim();
+            const notificationEmail = document.getElementById('setup-notification-email').value.trim();
+            
+            if (!name || !email || !password || !membership) {
+                alert('Please fill all fields');
+                return;
+            }
+            
+            // Generate user ID
+            const userId = 'user_' + Date.now();
+            
+            // Show instructions
+            const setupData = {
+                id: userId,
+                name: name,
+                email: email,
+                password: password,
+                membership_id: parseInt(membership),
+                notification_email: notificationEmail,
+                locations_box_id: 14
+            };
+            
+            const statusEl = document.getElementById('setup-status');
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = `
+                <strong>Your User ID: ${userId}</strong><br><br>
+                To complete setup, add this to data/users.json in GitHub:<br><br>
+                <code style="font-size:11px; word-break:break-all;">
+                "${userId}": ${JSON.stringify(setupData)}
+                </code><br><br>
+                Save your User ID: <strong>${userId}</strong>
+            `;
+            
+            // Save locally for now
+            localStorage.setItem('userId', userId);
+            localStorage.setItem('pendingSetup', JSON.stringify(setupData));
+        }
+        
+        // Rules
+        function renderRules() {
+            const userRules = rulesData.rules.filter(r => r.user_id === currentUser);
+            const container = document.getElementById('rules-list');
+            
+            if (userRules.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📭</div>
+                        <p>No rules yet. Add one below!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = userRules.map(rule => `
+                <div class="rule-item">
+                    <div class="info">
+                        <div class="name">${rule.name}</div>
+                        <div class="details">
+                            ${rule.target_class} - ${DAY_NAMES[rule.target_day]} ${rule.target_time}<br>
+                            Triggers: ${DAY_NAMES[rule.trigger_day]} ${rule.trigger_time}
+                        </div>
+                    </div>
+                    <button class="delete-btn" onclick="deleteRule('${rule.id}')">×</button>
+                </div>
+            `).join('');
+        }
+        
+        function addRule() {
+            const day = parseInt(document.getElementById('add-day').value);
+            const time = document.getElementById('add-time').value;
+            
+            if (!time) {
+                alert('Please select a time');
+                return;
+            }
+            
+            // Calculate trigger (72h before)
+            const triggerDay = (day - 3 + 7) % 7;
+            const ruleNum = rulesData.rules.filter(r => r.user_id === currentUser).length + 1;
+            
+            const newRule = {
+                id: 'rule_' + Date.now(),
+                user_id: currentUser,
+                name: 'Rule ' + ruleNum,
+                target_class: 'CrossFit',
+                target_day: day,
+                target_time: time,
+                trigger_day: triggerDay,
+                trigger_time: time + ':00',
+                enabled: true
+            };
+            
+            // Show instructions
+            alert(`To add this rule, add to data/rules.json in GitHub:\n\n${JSON.stringify(newRule, null, 2)}\n\nOr commit via GitHub.`);
+            
+            // Add locally for display
+            rulesData.rules.push(newRule);
+            renderRules();
+        }
+        
+        function deleteRule(ruleId) {
+            if (!confirm('Delete this rule?')) return;
+            alert(`To delete, remove rule with id "${ruleId}" from data/rules.json in GitHub.`);
+            rulesData.rules = rulesData.rules.filter(r => r.id !== ruleId);
+            renderRules();
+        }
+        
+        // Classes
+        function renderClasses() {
+            const userClasses = classesData.classes[currentUser] || [];
+            const container = document.getElementById('classes-list');
+            
+            if (userClasses.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📅</div>
+                        <p>No registered classes</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = userClasses.map(cls => `
+                <div class="class-item">
+                    <div class="name">✅ ${cls.name}</div>
+                    <div class="details">${cls.day} ${cls.date} at ${cls.time}</div>
+                </div>
+            `).join('');
+        }
+        
+        async function refreshClasses() {
+            await loadData();
+            renderClasses();
+            alert('Classes refreshed!');
+        }
+        
+        // Settings
+        function renderSettings() {
+            const user = usersData.users[currentUser];
+            const el = document.getElementById('settings-info');
+            
+            if (user) {
+                el.innerHTML = `
+                    <strong>Name:</strong> ${user.name}<br>
+                    <strong>Email:</strong> ${user.email}<br>
+                    <strong>User ID:</strong> ${currentUser}
+                `;
+            } else {
+                el.innerHTML = `<strong>User ID:</strong> ${currentUser}`;
+            }
+        }
+        
+        function logout() {
+            localStorage.removeItem('userId');
+            currentUser = null;
+            showScreen('login-screen');
+        }
+        
+        // Init
+        autoLogin();
+    </script>
+</body>
+</html>
