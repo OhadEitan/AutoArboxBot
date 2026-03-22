@@ -10,596 +10,493 @@
     <link rel="manifest" href="manifest.json">
     <title>AutoArbox</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
-            padding: 20px;
-            padding-top: env(safe-area-inset-top, 20px);
-            padding-bottom: 100px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 5px;
-        }
-        
-        .header p {
-            color: #888;
-            font-size: 14px;
-        }
-        
-        .card {
-            background: #16213e;
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .card h2 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .btn {
-            background: #e94560;
-            color: white;
-            border: none;
-            padding: 14px 24px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .btn:active {
-            transform: scale(0.98);
-        }
-        
-        .btn-secondary {
-            background: #0f3460;
-        }
-        
-        .btn-danger {
-            background: #c0392b;
-        }
-        
-        .input-group {
-            margin-bottom: 15px;
-        }
-        
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #888;
-            font-size: 14px;
-        }
-        
-        .input-group input, .input-group select {
-            width: 100%;
-            padding: 14px;
-            border: 2px solid #0f3460;
-            border-radius: 12px;
-            background: #1a1a2e;
-            color: #eee;
-            font-size: 16px;
-        }
-        
-        .input-group input:focus, .input-group select:focus {
-            outline: none;
-            border-color: #e94560;
-        }
-        
-        .rule-item {
-            background: #0f3460;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .rule-item .info {
-            flex: 1;
-        }
-        
-        .rule-item .name {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .rule-item .details {
-            font-size: 13px;
-            color: #888;
-        }
-        
-        .rule-item .delete-btn {
-            background: #c0392b;
-            color: white;
-            border: none;
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            font-size: 18px;
-            cursor: pointer;
-        }
-        
-        .class-item {
-            background: #0f3460;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-        }
-        
-        .class-item .name {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .class-item .details {
-            font-size: 13px;
-            color: #888;
-        }
-        
-        .tabs {
-            display: flex;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #16213e;
-            padding: 10px 20px;
-            padding-bottom: env(safe-area-inset-bottom, 10px);
-            border-top: 1px solid #0f3460;
-        }
-        
-        .tab {
-            flex: 1;
-            text-align: center;
-            padding: 10px;
-            color: #888;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        
-        .tab.active {
-            color: #e94560;
-        }
-        
-        .tab-icon {
-            font-size: 24px;
-            margin-bottom: 4px;
-        }
-        
-        .screen {
-            display: none;
-        }
-        
-        .screen.active {
-            display: block;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }
-        
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-        
-        .status {
-            padding: 10px 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            font-size: 14px;
-        }
-        
-        .status.success { background: #27ae60; }
-        .status.error { background: #c0392b; }
-        .status.info { background: #0f3460; }
-        
-        .hidden { display: none !important; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#1a1a2e;color:#eee;min-height:100vh;padding-bottom:70px}
+        .header{text-align:center;padding:20px 16px 10px;padding-top:max(20px,env(safe-area-inset-top))}
+        .header h1{font-size:24px}
+        .header p{color:#888;font-size:13px}
+
+        /* Tabs */
+        .tab-bar{position:fixed;bottom:0;left:0;right:0;display:flex;background:#16213e;border-top:1px solid #0f3460;padding-bottom:env(safe-area-inset-bottom,8px);z-index:100}
+        .tab-bar button{flex:1;padding:10px 0 6px;background:none;border:none;color:#888;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+        .tab-bar button.active{color:#e94560}
+        .tab-bar button svg{width:22px;height:22px}
+        .tab-content{display:none;padding:0 16px 16px}
+        .tab-content.active{display:block}
+
+        /* Cards */
+        .card{background:#16213e;border-radius:14px;padding:16px;margin-bottom:14px}
+        .card h3{font-size:16px;margin-bottom:6px}
+        .card-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#aaa;margin-bottom:4px}
+        .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+        .badge-green{background:#1b5e20;color:#81c784}
+        .badge-yellow{background:#5c4b00;color:#ffd54f}
+        .badge-red{background:#5c0000;color:#ef9a9a}
+
+        /* Toggle */
+        .toggle{position:relative;width:44px;height:24px;cursor:pointer}
+        .toggle input{opacity:0;width:0;height:0}
+        .toggle .slider{position:absolute;inset:0;background:#444;border-radius:24px;transition:.2s}
+        .toggle .slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+        .toggle input:checked+.slider{background:#e94560}
+        .toggle input:checked+.slider::before{transform:translateX(20px)}
+
+        /* Form */
+        .form-group{margin-bottom:14px}
+        .form-group label{display:block;font-size:13px;color:#aaa;margin-bottom:4px}
+        .form-group input,.form-group select{width:100%;padding:10px 12px;border:1px solid #0f3460;border-radius:10px;background:#0f3460;color:#eee;font-size:15px;outline:none}
+        .form-group input:focus,.form-group select:focus{border-color:#e94560}
+        .form-group small{color:#666;font-size:11px}
+        .btn{width:100%;padding:12px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:6px}
+        .btn-primary{background:#e94560;color:#fff}
+        .btn-secondary{background:#0f3460;color:#eee}
+        .btn-danger{background:#5c0000;color:#ef9a9a}
+        .btn:disabled{opacity:.5}
+        .btn-sm{width:auto;padding:8px 16px;font-size:13px;margin-top:0}
+
+        /* Inline form */
+        .rule-form{background:#0f3460;border-radius:12px;padding:16px;margin-bottom:14px;display:none}
+        .rule-form.open{display:block}
+
+        /* Setup */
+        #setup{padding:16px}
+        #setup .logo{font-size:48px;text-align:center;margin-bottom:10px}
+
+        /* Toast */
+        .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;z-index:200;display:none}
+        .toast.show{display:block;animation:fadeout .5s 2s forwards}
+        @keyframes fadeout{to{opacity:0}}
+
+        /* Empty state */
+        .empty{text-align:center;padding:40px 0;color:#555}
+        .empty svg{width:48px;height:48px;margin-bottom:12px}
+
+        .delete-btn{background:none;border:none;color:#ef5350;font-size:18px;cursor:pointer;padding:4px 8px}
     </style>
 </head>
 <body>
-    <!-- Login Screen -->
-    <div id="login-screen" class="screen active">
-        <div class="header">
-            <h1>🏋️ AutoArbox</h1>
-            <p>Auto-register for your gym classes</p>
-        </div>
-        
-        <div class="card">
-            <h2>👤 Login</h2>
-            <div class="input-group">
-                <label>Your User ID</label>
-                <input type="text" id="login-user-id" placeholder="Enter your user ID">
-            </div>
-            <button class="btn" onclick="login()">Login</button>
-            <button class="btn btn-secondary" onclick="showScreen('setup-screen')">New User? Setup</button>
-        </div>
+
+<div id="toast" class="toast"></div>
+
+<!-- ── Setup screen ── -->
+<div id="setup" style="display:none">
+    <div class="logo">🏋️</div>
+    <h2 style="text-align:center;margin-bottom:4px">AutoArbox Setup</h2>
+    <p style="text-align:center;color:#888;font-size:13px;margin-bottom:20px">Configure your auto-registration bot</p>
+
+    <div class="card">
+        <h3 style="margin-bottom:12px">Your Info</h3>
+        <div class="form-group"><label>Display Name</label><input id="s_name" placeholder="e.g. Ohad"></div>
+        <div class="form-group"><label>User ID (short, no spaces)</label><input id="s_userId" placeholder="e.g. ohad"></div>
+        <div class="form-group"><label>Arbox Email</label><input id="s_email" type="email" placeholder="you@example.com"></div>
+        <div class="form-group"><label>Arbox Password</label><input id="s_password" type="password"><small>Stored only in the Cloudflare Worker, never in GitHub</small></div>
+        <div class="form-group"><label>Membership ID</label><input id="s_membership" type="number" placeholder="e.g. 123456"></div>
+        <div class="form-group"><label>Box ID</label><input id="s_boxId" type="number" value="14"></div>
+        <div class="form-group"><label>Notification Email</label><input id="s_notifEmail" type="email" placeholder="your@email.com"></div>
     </div>
-    
-    <!-- Setup Screen -->
-    <div id="setup-screen" class="screen">
-        <div class="header">
-            <h1>🏋️ AutoArbox</h1>
-            <p>Setup your account</p>
-        </div>
-        
-        <div class="card">
-            <h2>⚙️ Setup</h2>
-            <div id="setup-status" class="status info hidden"></div>
-            
-            <div class="input-group">
-                <label>Your Name</label>
-                <input type="text" id="setup-name" placeholder="e.g., Ohad">
-            </div>
-            <div class="input-group">
-                <label>Arbox Email</label>
-                <input type="email" id="setup-email" placeholder="your@email.com">
-            </div>
-            <div class="input-group">
-                <label>Arbox Password</label>
-                <input type="password" id="setup-password" placeholder="Your Arbox password">
-            </div>
-            <div class="input-group">
-                <label>Membership ID</label>
-                <input type="number" id="setup-membership" placeholder="e.g., 7751132">
-            </div>
-            <div class="input-group">
-                <label>Notification Email</label>
-                <input type="email" id="setup-notification-email" placeholder="Where to send notifications">
-            </div>
-            <button class="btn" onclick="saveSetup()">Save & Continue</button>
-            <button class="btn btn-secondary" onclick="showScreen('login-screen')">Back to Login</button>
-        </div>
+
+    <div class="card">
+        <h3 style="margin-bottom:12px">Worker Connection</h3>
+        <div class="form-group"><label>Worker URL</label><input id="s_workerUrl" placeholder="https://autoarboxbot.YOUR.workers.dev"></div>
+        <div class="form-group"><label>Worker Key</label><input id="s_workerKey" type="password" placeholder="secret key"></div>
     </div>
-    
-    <!-- Rules Screen -->
-    <div id="rules-screen" class="screen">
-        <div class="header">
-            <h1>📋 My Rules</h1>
-            <p>Auto-register for these classes</p>
-        </div>
-        
-        <div id="rules-list"></div>
-        
-        <div class="card">
-            <h2>➕ Add Rule</h2>
-            <div class="input-group">
-                <label>Day</label>
-                <select id="add-day">
-                    <option value="0">Sunday</option>
-                    <option value="1">Monday</option>
-                    <option value="2">Tuesday</option>
-                    <option value="3">Wednesday</option>
-                    <option value="4">Thursday</option>
-                    <option value="5">Friday</option>
-                    <option value="6">Saturday</option>
-                </select>
-            </div>
-            <div class="input-group">
-                <label>Time</label>
-                <input type="time" id="add-time" value="18:00">
-            </div>
-            <button class="btn" onclick="addRule()">Add Rule</button>
-        </div>
+
+    <button class="btn btn-primary" onclick="submitSetup()">Save &amp; Start</button>
+    <p id="setupError" style="color:#ef5350;text-align:center;margin-top:10px;font-size:13px"></p>
+</div>
+
+<!-- ── Main app ── -->
+<div id="app" style="display:none">
+    <div class="header">
+        <h1>AutoArbox</h1>
+        <p id="userGreeting"></p>
     </div>
-    
-    <!-- Classes Screen -->
-    <div id="classes-screen" class="screen">
-        <div class="header">
-            <h1>📅 My Classes</h1>
-            <p>Your registered classes</p>
+
+    <!-- Rules tab -->
+    <div id="tab-rules" class="tab-content active">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h2 style="font-size:18px">Rules</h2>
+            <button class="btn btn-primary btn-sm" onclick="toggleRuleForm()">+ Add</button>
         </div>
-        
-        <div id="classes-list"></div>
-        
-        <button class="btn btn-secondary" onclick="refreshClasses()">🔄 Refresh</button>
-    </div>
-    
-    <!-- Settings Screen -->
-    <div id="settings-screen" class="screen">
-        <div class="header">
-            <h1>⚙️ Settings</h1>
-        </div>
-        
-        <div class="card">
-            <h2>👤 Account</h2>
-            <p id="settings-info"></p>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
-        </div>
-    </div>
-    
-    <!-- Tab Bar -->
-    <div class="tabs" id="tab-bar" style="display: none;">
-        <div class="tab active" onclick="showTab('rules-screen')">
-            <div class="tab-icon">📋</div>
-            <div>Rules</div>
-        </div>
-        <div class="tab" onclick="showTab('classes-screen')">
-            <div class="tab-icon">📅</div>
-            <div>Classes</div>
-        </div>
-        <div class="tab" onclick="showTab('settings-screen')">
-            <div class="tab-icon">⚙️</div>
-            <div>Settings</div>
-        </div>
-    </div>
-    
-    <script>
-        // Configuration
-        const GITHUB_REPO = 'OhadEitan/AutoArboxBot';
-        const GITHUB_BRANCH = 'main';
-        const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
-        // State
-        let currentUser = null;
-        let usersData = { users: {} };
-        let rulesData = { rules: [] };
-        let classesData = { classes: {} };
-        
-        // GitHub API helpers
-        async function fetchGitHubFile(path) {
-            const url = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${path}`;
-            const response = await fetch(url + '?t=' + Date.now()); // Cache bust
-            if (!response.ok) throw new Error('File not found');
-            return response.json();
-        }
-        
-        async function loadData() {
-            try {
-                usersData = await fetchGitHubFile('data/users.json');
-                rulesData = await fetchGitHubFile('data/rules.json');
-                classesData = await fetchGitHubFile('data/classes.json');
-            } catch (e) {
-                console.error('Error loading data:', e);
-            }
-        }
-        
-        // Screen management
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
-            
-            const showTabs = ['rules-screen', 'classes-screen', 'settings-screen'].includes(screenId);
-            document.getElementById('tab-bar').style.display = showTabs ? 'flex' : 'none';
-        }
-        
-        function showTab(screenId) {
-            showScreen(screenId);
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            
-            if (screenId === 'rules-screen') renderRules();
-            if (screenId === 'classes-screen') renderClasses();
-            if (screenId === 'settings-screen') renderSettings();
-        }
-        
-        // Login
-        async function login() {
-            const userId = document.getElementById('login-user-id').value.trim();
-            if (!userId) {
-                alert('Please enter your user ID');
-                return;
-            }
-            
-            await loadData();
-            
-            if (!usersData.users[userId]) {
-                alert('User not found. Please setup first.');
-                return;
-            }
-            
-            currentUser = userId;
-            localStorage.setItem('userId', userId);
-            
-            showTab('rules-screen');
-            renderRules();
-        }
-        
-        // Auto-login
-        async function autoLogin() {
-            const savedUserId = localStorage.getItem('userId');
-            if (savedUserId) {
-                await loadData();
-                if (usersData.users[savedUserId]) {
-                    currentUser = savedUserId;
-                    showTab('rules-screen');
-                    renderRules();
-                    return;
-                }
-            }
-            showScreen('login-screen');
-        }
-        
-        // Setup
-        function saveSetup() {
-            const name = document.getElementById('setup-name').value.trim();
-            const email = document.getElementById('setup-email').value.trim();
-            const password = document.getElementById('setup-password').value;
-            const membership = document.getElementById('setup-membership').value.trim();
-            const notificationEmail = document.getElementById('setup-notification-email').value.trim();
-            
-            if (!name || !email || !password || !membership) {
-                alert('Please fill all fields');
-                return;
-            }
-            
-            // Generate user ID
-            const userId = 'user_' + Date.now();
-            
-            // Show instructions
-            const setupData = {
-                id: userId,
-                name: name,
-                email: email,
-                password: password,
-                membership_id: parseInt(membership),
-                notification_email: notificationEmail,
-                locations_box_id: 14
-            };
-            
-            const statusEl = document.getElementById('setup-status');
-            statusEl.classList.remove('hidden');
-            statusEl.innerHTML = `
-                <strong>Your User ID: ${userId}</strong><br><br>
-                To complete setup, add this to data/users.json in GitHub:<br><br>
-                <code style="font-size:11px; word-break:break-all;">
-                "${userId}": ${JSON.stringify(setupData)}
-                </code><br><br>
-                Save your User ID: <strong>${userId}</strong>
-            `;
-            
-            // Save locally for now
-            localStorage.setItem('userId', userId);
-            localStorage.setItem('pendingSetup', JSON.stringify(setupData));
-        }
-        
-        // Rules
-        function renderRules() {
-            const userRules = rulesData.rules.filter(r => r.user_id === currentUser);
-            const container = document.getElementById('rules-list');
-            
-            if (userRules.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">📭</div>
-                        <p>No rules yet. Add one below!</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = userRules.map(rule => `
-                <div class="rule-item">
-                    <div class="info">
-                        <div class="name">${rule.name}</div>
-                        <div class="details">
-                            ${rule.target_class} - ${DAY_NAMES[rule.target_day]} ${rule.target_time}<br>
-                            Triggers: ${DAY_NAMES[rule.trigger_day]} ${rule.trigger_time}
-                        </div>
-                    </div>
-                    <button class="delete-btn" onclick="deleteRule('${rule.id}')">×</button>
+
+        <div id="ruleForm" class="rule-form">
+            <input type="hidden" id="rf_id">
+            <div class="form-group"><label>Class Name</label><input id="rf_class" placeholder="e.g. CrossFit"></div>
+            <div style="display:flex;gap:10px">
+                <div class="form-group" style="flex:1"><label>Day</label>
+                    <select id="rf_day">
+                        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+                    </select>
                 </div>
-            `).join('');
-        }
-        
-        function addRule() {
-            const day = parseInt(document.getElementById('add-day').value);
-            const time = document.getElementById('add-time').value;
-            
-            if (!time) {
-                alert('Please select a time');
-                return;
-            }
-            
-            // Calculate trigger (72h before)
-            const triggerDay = (day - 3 + 7) % 7;
-            const ruleNum = rulesData.rules.filter(r => r.user_id === currentUser).length + 1;
-            
-            const newRule = {
-                id: 'rule_' + Date.now(),
-                user_id: currentUser,
-                name: 'Rule ' + ruleNum,
-                target_class: 'CrossFit',
-                target_day: day,
-                target_time: time,
-                trigger_day: triggerDay,
-                trigger_time: time + ':00',
-                enabled: true
-            };
-            
-            // Show instructions
-            alert(`To add this rule, add to data/rules.json in GitHub:\n\n${JSON.stringify(newRule, null, 2)}\n\nOr commit via GitHub.`);
-            
-            // Add locally for display
-            rulesData.rules.push(newRule);
-            renderRules();
-        }
-        
-        function deleteRule(ruleId) {
-            if (!confirm('Delete this rule?')) return;
-            alert(`To delete, remove rule with id "${ruleId}" from data/rules.json in GitHub.`);
-            rulesData.rules = rulesData.rules.filter(r => r.id !== ruleId);
-            renderRules();
-        }
-        
-        // Classes
-        function renderClasses() {
-            const userClasses = classesData.classes[currentUser] || [];
-            const container = document.getElementById('classes-list');
-            
-            if (userClasses.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">📅</div>
-                        <p>No registered classes</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = userClasses.map(cls => `
-                <div class="class-item">
-                    <div class="name">✅ ${cls.name}</div>
-                    <div class="details">${cls.day} ${cls.date} at ${cls.time}</div>
+                <div class="form-group" style="flex:1"><label>Time</label><input id="rf_time" type="time"></div>
+            </div>
+            <div class="form-group"><label>Repeat</label>
+                <select id="rf_repeat"><option value="weekly">Weekly</option><option value="once">Once</option></select>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px">
+                <button class="btn btn-primary" onclick="saveRule()" style="flex:1">Save Rule</button>
+                <button class="btn btn-secondary" onclick="toggleRuleForm()" style="flex:1">Cancel</button>
+            </div>
+        </div>
+
+        <div id="rulesContainer"></div>
+    </div>
+
+    <!-- Log tab -->
+    <div id="tab-log" class="tab-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h2 style="font-size:18px">My Classes</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadClasses()">Refresh</button>
+        </div>
+        <div id="classesContainer"></div>
+    </div>
+
+    <!-- Settings tab -->
+    <div id="tab-settings" class="tab-content">
+        <h2 style="font-size:18px;margin-bottom:12px">Settings</h2>
+
+        <div class="card">
+            <h3 style="margin-bottom:12px">Worker Connection</h3>
+            <div class="form-group"><label>Worker URL</label><input id="set_workerUrl"></div>
+            <div class="form-group"><label>Worker Key</label><input id="set_workerKey" type="password"></div>
+            <div style="display:flex;gap:10px;margin-top:8px">
+                <button class="btn btn-primary" onclick="saveSettings()" style="flex:1">Save</button>
+                <button class="btn btn-secondary" onclick="testConnection()" style="flex:1">Test</button>
+            </div>
+            <p id="settingsMsg" style="font-size:13px;margin-top:8px;text-align:center"></p>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom:8px">Account</h3>
+            <div class="card-row"><span>Name</span><span id="set_name"></span></div>
+            <div class="card-row"><span>User ID</span><span id="set_userId"></span></div>
+        </div>
+
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Tab bar -->
+    <nav class="tab-bar">
+        <button class="active" data-tab="rules" onclick="switchTab('rules')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+            Rules
+        </button>
+        <button data-tab="log" onclick="switchTab('log')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Log
+        </button>
+        <button data-tab="settings" onclick="switchTab('settings')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+        </button>
+    </nav>
+</div>
+
+<script>
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+let allRules = [];
+
+// ── Helpers ──
+
+function getCfg() {
+    try { return JSON.parse(localStorage.getItem('arbox_cfg') || 'null'); } catch { return null; }
+}
+function saveCfg(c) { localStorage.setItem('arbox_cfg', JSON.stringify(c)); }
+function getUserId() { return localStorage.getItem('arbox_userId'); }
+function getUserName() { return localStorage.getItem('arbox_userName'); }
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    setTimeout(() => t.className = 'toast', 2500);
+}
+
+async function api(method, path, body) {
+    const cfg = getCfg();
+    if (!cfg) throw new Error('Not configured');
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-Worker-Key': cfg.workerKey },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(cfg.workerUrl.replace(/\/+$/, '') + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+}
+
+// ── Routing ──
+
+function init() {
+    const cfg = getCfg();
+    const uid = getUserId();
+    if (!cfg || !uid) {
+        document.getElementById('setup').style.display = 'block';
+        document.getElementById('app').style.display = 'none';
+    } else {
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('userGreeting').textContent = `Hi, ${getUserName()}`;
+        document.getElementById('set_workerUrl').value = cfg.workerUrl;
+        document.getElementById('set_workerKey').value = cfg.workerKey;
+        document.getElementById('set_name').textContent = getUserName();
+        document.getElementById('set_userId').textContent = uid;
+        loadRules();
+    }
+}
+
+// ── Setup ──
+
+async function submitSetup() {
+    const errEl = document.getElementById('setupError');
+    errEl.textContent = '';
+
+    const name = document.getElementById('s_name').value.trim();
+    const userId = document.getElementById('s_userId').value.trim().toLowerCase().replace(/\s+/g, '');
+    const email = document.getElementById('s_email').value.trim();
+    const password = document.getElementById('s_password').value;
+    const membership = document.getElementById('s_membership').value.trim();
+    const boxId = document.getElementById('s_boxId').value.trim();
+    const notifEmail = document.getElementById('s_notifEmail').value.trim();
+    const workerUrl = document.getElementById('s_workerUrl').value.trim();
+    const workerKey = document.getElementById('s_workerKey').value.trim();
+
+    if (!name || !userId || !email || !password || !membership || !workerUrl || !workerKey) {
+        errEl.textContent = 'Please fill in all required fields.';
+        return;
+    }
+
+    saveCfg({ workerUrl, workerKey });
+
+    try {
+        await api('POST', '/users', {
+            user_id: userId, name, email, password,
+            membership_id: Number(membership),
+            locations_box_id: Number(boxId) || 14,
+            notification_email: notifEmail,
+        });
+
+        localStorage.setItem('arbox_userId', userId);
+        localStorage.setItem('arbox_userName', name);
+        toast('Account saved!');
+        init();
+    } catch (e) {
+        errEl.textContent = e.message;
+    }
+}
+
+// ── Tabs ──
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-bar button').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelector(`.tab-bar button[data-tab="${name}"]`).classList.add('active');
+
+    if (name === 'log') loadClasses();
+}
+
+// ── Rules ──
+
+async function loadRules() {
+    const container = document.getElementById('rulesContainer');
+    container.innerHTML = '<p style="text-align:center;color:#555">Loading...</p>';
+    try {
+        const data = await api('GET', '/rules');
+        allRules = (data.rules || []).filter(r => r.user_id === getUserId());
+        renderRules();
+    } catch (e) {
+        container.innerHTML = `<p style="color:#ef5350;text-align:center">${e.message}</p>`;
+    }
+}
+
+function renderRules() {
+    const container = document.getElementById('rulesContainer');
+    if (!allRules.length) {
+        container.innerHTML = '<div class="empty"><p>No rules yet.<br>Tap + Add to create one.</p></div>';
+        return;
+    }
+    container.innerHTML = allRules.map(r => {
+        const banner = getBanner(r);
+        return `
+        <div class="card" style="opacity:${r.enabled ? 1 : 0.5}">
+            ${banner}
+            <div style="display:flex;justify-content:space-between;align-items:start">
+                <div>
+                    <h3>${esc(r.target_class)}</h3>
+                    <div class="card-row" style="margin:0">${DAY_FULL[r.target_day]} ${r.target_time}</div>
+                    <div class="card-row" style="margin:0;font-size:11px">Trigger: ${DAY_NAMES[r.trigger_day]} ${r.trigger_time} &middot; ${r.repeat}</div>
                 </div>
-            `).join('');
+                <div style="display:flex;align-items:center;gap:6px">
+                    <label class="toggle"><input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.id}')"><span class="slider"></span></label>
+                    <button class="delete-btn" onclick="deleteRule('${r.id}')">&times;</button>
+                </div>
+            </div>
+            ${r.last_result ? `<div style="font-size:11px;color:#888;margin-top:6px">Last: ${esc(r.last_result)}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function getBanner(rule) {
+    const now = new Date();
+    const target = nextOccurrence(rule.target_day, rule.target_time);
+    const diffMs = target - now;
+    const diffH = diffMs / 3600000;
+
+    if (diffH < 72 && diffH > 0) {
+        const h = Math.floor(diffH);
+        return `<div class="badge badge-green" style="margin-bottom:8px">&#x1F7E2; Registration open &mdash; class in ${h}h</div>`;
+    }
+    const d = Math.floor(diffH / 24);
+    const h = Math.floor(diffH % 24);
+    return `<div class="badge badge-yellow" style="margin-bottom:8px">&#x1F550; Opens in ${d}d ${h}h</div>`;
+}
+
+function nextOccurrence(dayIdx, timeStr) {
+    const now = new Date();
+    const [hh, mm] = timeStr.split(':').map(Number);
+    const todayIdx = now.getDay(); // 0=Sun
+    let daysAhead = (dayIdx - todayIdx + 7) % 7;
+    if (daysAhead === 0) {
+        const todayTarget = new Date(now); todayTarget.setHours(hh, mm, 0, 0);
+        if (todayTarget <= now) daysAhead = 7;
+    }
+    const d = new Date(now);
+    d.setDate(d.getDate() + daysAhead);
+    d.setHours(hh, mm, 0, 0);
+    return d;
+}
+
+function toggleRuleForm(ruleId) {
+    const form = document.getElementById('ruleForm');
+    if (form.classList.contains('open') && !ruleId) {
+        form.classList.remove('open');
+        return;
+    }
+    form.classList.add('open');
+    if (ruleId) {
+        const r = allRules.find(x => x.id === ruleId);
+        if (r) {
+            document.getElementById('rf_id').value = r.id;
+            document.getElementById('rf_class').value = r.target_class;
+            document.getElementById('rf_day').value = r.target_day;
+            document.getElementById('rf_time').value = r.target_time;
+            document.getElementById('rf_repeat').value = r.repeat;
         }
-        
-        async function refreshClasses() {
-            await loadData();
-            renderClasses();
-            alert('Classes refreshed!');
+    } else {
+        document.getElementById('rf_id').value = '';
+        document.getElementById('rf_class').value = '';
+        document.getElementById('rf_day').value = '0';
+        document.getElementById('rf_time').value = '';
+        document.getElementById('rf_repeat').value = 'weekly';
+    }
+}
+
+async function saveRule() {
+    const id = document.getElementById('rf_id').value;
+    const target_class = document.getElementById('rf_class').value.trim();
+    const target_day = Number(document.getElementById('rf_day').value);
+    const target_time = document.getElementById('rf_time').value;
+    const repeat = document.getElementById('rf_repeat').value;
+
+    if (!target_class || !target_time) { toast('Fill class and time'); return; }
+
+    const rule = {
+        user_id: getUserId(),
+        name: `${target_class} ${DAY_NAMES[target_day]} ${target_time}`,
+        target_class, target_day, target_time, repeat,
+    };
+
+    try {
+        if (id) {
+            await api('PUT', `/rules/${id}`, rule);
+        } else {
+            await api('POST', '/rules', rule);
         }
-        
-        // Settings
-        function renderSettings() {
-            const user = usersData.users[currentUser];
-            const el = document.getElementById('settings-info');
-            
-            if (user) {
-                el.innerHTML = `
-                    <strong>Name:</strong> ${user.name}<br>
-                    <strong>Email:</strong> ${user.email}<br>
-                    <strong>User ID:</strong> ${currentUser}
-                `;
-            } else {
-                el.innerHTML = `<strong>User ID:</strong> ${currentUser}`;
-            }
+        document.getElementById('ruleForm').classList.remove('open');
+        toast('Rule saved!');
+        loadRules();
+    } catch (e) {
+        toast('Error: ' + e.message);
+    }
+}
+
+async function deleteRule(id) {
+    if (!confirm('Delete this rule?')) return;
+    try {
+        await api('DELETE', `/rules/${id}`);
+        toast('Rule deleted');
+        loadRules();
+    } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function toggleRule(id) {
+    try {
+        await api('PATCH', `/rules/${id}`);
+        loadRules();
+    } catch (e) { toast('Error: ' + e.message); }
+}
+
+// ── Classes / Log ──
+
+async function loadClasses() {
+    const container = document.getElementById('classesContainer');
+    container.innerHTML = '<p style="text-align:center;color:#555">Loading...</p>';
+    try {
+        const data = await api('GET', '/classes');
+        const mine = (data.classes || {})[getUserId()] || [];
+        if (!mine.length) {
+            container.innerHTML = '<div class="empty"><p>No upcoming classes</p></div>';
+            return;
         }
-        
-        function logout() {
-            localStorage.removeItem('userId');
-            currentUser = null;
-            showScreen('login-screen');
-        }
-        
-        // Init
-        autoLogin();
-    </script>
+        container.innerHTML = mine.map(c => `
+            <div class="card">
+                <h3>${esc(c.name)}</h3>
+                <div class="card-row"><span>${c.date}</span><span>${c.time}</span></div>
+                <div class="card-row"><span>${c.day || ''}</span></div>
+            </div>`).join('');
+    } catch (e) {
+        container.innerHTML = `<p style="color:#ef5350;text-align:center">${e.message}</p>`;
+    }
+}
+
+// ── Settings ──
+
+function saveSettings() {
+    const workerUrl = document.getElementById('set_workerUrl').value.trim();
+    const workerKey = document.getElementById('set_workerKey').value.trim();
+    if (!workerUrl || !workerKey) { toast('Fill both fields'); return; }
+    saveCfg({ workerUrl, workerKey });
+    toast('Settings saved!');
+}
+
+async function testConnection() {
+    const msg = document.getElementById('settingsMsg');
+    msg.textContent = 'Testing...';
+    msg.style.color = '#aaa';
+    try {
+        await api('GET', '/rules');
+        msg.textContent = 'Connected!';
+        msg.style.color = '#81c784';
+    } catch (e) {
+        msg.textContent = 'Failed: ' + e.message;
+        msg.style.color = '#ef5350';
+    }
+}
+
+function logout() {
+    if (!confirm('Logout? This clears local data.')) return;
+    localStorage.clear();
+    location.reload();
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Boot
+init();
+</script>
 </body>
 </html>

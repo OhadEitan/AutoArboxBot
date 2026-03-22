@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """
 Check rules and register for classes when trigger time matches.
-Runs via GitHub Actions.
+Runs via GitHub Actions hourly.
 """
 
 import json
-import smtplib
 import os
+import smtplib
+import sys
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import requests
+
 # Add parent directory to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.arbox_client import ArboxClient
@@ -23,9 +25,13 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
+WORKER_URL = os.environ.get("WORKER_URL", "")
+WORKER_KEY = os.environ.get("WORKER_KEY", "")
+
+
+# ── Data helpers ─────────────────────────────────────────────────────
 
 def load_json(filename):
-    """Load a JSON file from data directory."""
     filepath = DATA_DIR / filename
     if not filepath.exists():
         return {}
@@ -34,65 +40,105 @@ def load_json(filename):
 
 
 def save_json(filename, data):
-    """Save data to a JSON file."""
     filepath = DATA_DIR / filename
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
 
 
-def send_email(to_email, subject, body):
-    """Send email notification using GitHub Actions."""
-    # For now, just print - we'll set up email later
-    print(f"📧 EMAIL to {to_email}")
-    print(f"   Subject: {subject}")
-    print(f"   Body: {body}")
-    # TODO: Implement actual email sending
+# ── Credentials ──────────────────────────────────────────────────────
 
+def get_user_creds(user_id):
+    """
+    Get credentials from Worker KV first, fall back to env vars.
+    Returns dict with email, password, membership_id or None.
+    """
+    # Try Worker
+    if WORKER_URL and WORKER_KEY:
+        try:
+            url = f"{WORKER_URL.rstrip('/')}/creds/{user_id}"
+            resp = requests.get(url, headers={"X-Worker-Key": WORKER_KEY}, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"   Got creds for {user_id} from Worker KV")
+                return data
+        except Exception as e:
+            print(f"   Worker KV fetch failed: {e}")
+
+    # Fall back to env vars
+    prefix = f"ARBOX_{user_id.upper()}"
+    email = os.environ.get(f"{prefix}_EMAIL")
+    password = os.environ.get(f"{prefix}_PASSWORD")
+    membership = os.environ.get(f"{prefix}_MEMBERSHIP")
+    if email and password and membership:
+        print(f"   Got creds for {user_id} from env vars")
+        return {"email": email, "password": password, "membership_id": int(membership)}
+
+    return None
+
+
+# ── Time helpers ─────────────────────────────────────────────────────
 
 def get_current_time():
-    """Get current time in Israel timezone."""
     return datetime.now(ISRAEL_TZ)
 
 
 def should_trigger_rule(rule, now):
-    """Check if a rule should be triggered now."""
-    # Rule format: trigger_day (0-6), trigger_time ("HH:MM:SS")
-    
     # Convert Python weekday (0=Mon) to our format (0=Sun)
-    python_weekday = now.weekday()
-    today = (python_weekday + 1) % 7
-    
+    today = (now.weekday() + 1) % 7
+
     if rule["trigger_day"] != today:
         return False
-    
-    # Check hour (we run hourly, so just match the hour)
-    trigger_parts = rule["trigger_time"].split(":")
-    trigger_hour = int(trigger_parts[0])
-    
-    if now.hour != trigger_hour:
-        return False
-    
-    return True
+
+    trigger_hour = int(rule["trigger_time"].split(":")[0])
+    return now.hour == trigger_hour
 
 
-def register_for_class(user, rule):
-    """Attempt to register user for their target class."""
-    print(f"🔄 Registering {user['name']} for {rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}")
-    
-    client = ArboxClient(user["email"], user["password"])
-    
+# ── Email ────────────────────────────────────────────────────────────
+
+def send_email(to_email, subject, body):
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+
+    if not all([smtp_host, smtp_user, smtp_pass]):
+        print(f"   (SMTP not configured, skipping email to {to_email})")
+        print(f"   Subject: {subject}")
+        return
+
+    try:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = smtp_user
+        msg["To"] = to_email
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, [to_email], msg.as_string())
+        print(f"   Email sent to {to_email}")
+    except Exception as e:
+        print(f"   Email failed: {e}")
+
+
+# ── Registration ─────────────────────────────────────────────────────
+
+def register_for_class(creds, user_profile, rule):
+    print(f"   Registering {user_profile['name']} for {rule['target_class']} "
+          f"{DAY_NAMES[rule['target_day']]} {rule['target_time']}")
+
+    client = ArboxClient(creds["email"], creds["password"])
+
     if not client.login():
         return {"success": False, "message": "Login failed"}
-    
-    # Fetch schedule
+
     now = get_current_time()
     sessions = client.get_schedule(
         from_date=now,
         to_date=now + timedelta(days=7),
-        locations_box_id=user.get("locations_box_id", 14),
+        locations_box_id=user_profile.get("locations_box_id", 14),
     )
-    
-    # Find target session
+
     target = None
     for s in sessions:
         if (
@@ -103,16 +149,17 @@ def register_for_class(user, rule):
         ):
             target = s
             break
-    
+
     if not target:
-        return {"success": False, "message": "Session not found"}
-    
+        return {"success": False, "message": "Session not found in schedule"}
+
     if target.is_registered:
         return {"success": True, "message": "Already registered", "already": True}
-    
-    # Try to register
+
+    membership_id = creds["membership_id"]
+
     if target.can_register:
-        result = client.register(target.id, user["membership_id"])
+        result = client.register(target.id, membership_id)
         if result.success:
             return {
                 "success": True,
@@ -120,11 +167,10 @@ def register_for_class(user, rule):
                 "date": target.date,
                 "time": target.time,
             }
-        else:
-            return {"success": False, "message": result.message}
-    
-    elif target.can_join_waitlist:
-        result = client.join_waitlist(target.id, user["membership_id"])
+        return {"success": False, "message": result.message}
+
+    if target.can_join_waitlist:
+        result = client.join_waitlist(target.id, membership_id)
         if result.success:
             return {
                 "success": True,
@@ -133,125 +179,120 @@ def register_for_class(user, rule):
                 "date": target.date,
                 "time": target.time,
             }
-        else:
-            return {"success": False, "message": result.message}
-    
-    else:
-        return {"success": False, "message": f"Cannot register: {target.booking_option}"}
+        return {"success": False, "message": result.message}
+
+    return {"success": False, "message": f"Cannot register: {target.booking_option}"}
 
 
-def update_user_classes(user_id, user):
-    """Fetch and update user's current class registrations."""
-    client = ArboxClient(user["email"], user["password"])
-    
+def update_user_classes(creds, user_profile):
+    client = ArboxClient(creds["email"], creds["password"])
     if not client.login():
         return []
-    
+
     now = get_current_time()
     sessions = client.get_schedule(
         from_date=now,
         to_date=now + timedelta(days=14),
-        locations_box_id=user.get("locations_box_id", 14),
+        locations_box_id=user_profile.get("locations_box_id", 14),
     )
-    
-    # Get registered classes
-    registered = []
-    for s in sessions:
-        if s.is_registered:
-            registered.append({
-                "name": s.name,
-                "date": s.date,
-                "time": s.time,
-                "day": DAY_NAMES[s.day_of_week],
-            })
-    
-    return registered
 
+    return [
+        {"name": s.name, "date": s.date, "time": s.time, "day": DAY_NAMES[s.day_of_week]}
+        for s in sessions
+        if s.is_registered
+    ]
+
+
+# ── Main ─────────────────────────────────────────────────────────────
 
 def main():
     now = get_current_time()
     print(f"⏰ Running at {now.strftime('%Y-%m-%d %H:%M:%S')} (Israel time)")
     print(f"   Day: {DAY_NAMES[(now.weekday() + 1) % 7]} (index {(now.weekday() + 1) % 7})")
-    
-    # Load data
+
     users_data = load_json("users.json")
     rules_data = load_json("rules.json")
     classes_data = load_json("classes.json")
-    
+
     users = users_data.get("users", {})
     rules = rules_data.get("rules", [])
-    
+
     if not users:
-        print("📭 No users configured")
+        print("No users configured")
         return
-    
     if not rules:
-        print("📭 No rules configured")
+        print("No rules configured")
         return
-    
-    print(f"👥 {len(users)} users, 📋 {len(rules)} rules")
-    
-    # Check each rule
+
+    print(f"   {len(users)} users, {len(rules)} rules")
+
     triggered_count = 0
     for rule in rules:
         if not rule.get("enabled", True):
             continue
-        
         if not should_trigger_rule(rule, now):
             continue
-        
+
         triggered_count += 1
         user_id = rule["user_id"]
-        user = users.get(user_id)
-        
-        if not user:
-            print(f"⚠️ User {user_id} not found for rule {rule['id']}")
+        user_profile = users.get(user_id)
+        if not user_profile:
+            print(f"   User {user_id} not found")
             continue
-        
-        print(f"\n🎯 Triggering rule: {rule['name']} for {user['name']}")
-        
-        # Register
-        result = register_for_class(user, rule)
-        
-        # Send notification email
-        if user.get("notification_email"):
+
+        creds = get_user_creds(user_id)
+        if not creds:
+            print(f"   No credentials for {user_id}")
+            continue
+
+        print(f"\n   Triggering: {rule['name']} for {user_profile['name']}")
+
+        result = register_for_class(creds, user_profile, rule)
+        print(f"   Result: {result['message']}")
+
+        # Send notification
+        notif_email = user_profile.get("notification_email")
+        if notif_email:
             if result["success"]:
                 if result.get("already"):
-                    subject = f"Already registered: {rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}"
-                    body = f"You were already registered for this class."
+                    subj = f"Already registered: {rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}"
+                    body = "You were already registered for this class."
                 elif result.get("waitlist"):
-                    subject = f"Joined waitlist: {rule['target_class']} {result['date']} {result['time']}"
-                    body = f"Class was full. You're on the waitlist."
+                    subj = f"Joined waitlist: {rule['target_class']} {result['date']} {result['time']}"
+                    body = "Class was full. You're on the waitlist."
                 else:
-                    subject = f"✅ Registered: {rule['target_class']} {result['date']} {result['time']}"
+                    subj = f"Registered: {rule['target_class']} {result['date']} {result['time']}"
                     body = result["message"]
             else:
-                subject = f"❌ Registration failed: {rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}"
+                subj = f"Registration failed: {rule['target_class']} {DAY_NAMES[rule['target_day']]} {rule['target_time']}"
                 body = result["message"]
-            
-            send_email(user["notification_email"], subject, body)
-        
-        # Update rule last run
+            send_email(notif_email, subj, body)
+
         rule["last_run"] = now.isoformat()
         rule["last_result"] = result["message"]
-    
-    print(f"\n✅ Triggered {triggered_count} rules")
-    
+
+        # Disable once-only rules after trigger
+        if rule.get("repeat") == "once":
+            rule["enabled"] = False
+
+    print(f"\n   Triggered {triggered_count} rules")
+
     # Update classes for all users
-    print("\n📅 Updating class registrations...")
+    print("\n   Updating class registrations...")
     classes_data["last_updated"] = now.isoformat()
     classes_data["classes"] = {}
-    
-    for user_id, user in users.items():
-        registered = update_user_classes(user_id, user)
+
+    for user_id, user_profile in users.items():
+        creds = get_user_creds(user_id)
+        if not creds:
+            continue
+        registered = update_user_classes(creds, user_profile)
         classes_data["classes"][user_id] = registered
-        print(f"   {user['name']}: {len(registered)} classes")
-    
-    # Save updated data
+        print(f"   {user_profile['name']}: {len(registered)} classes")
+
     save_json("rules.json", rules_data)
     save_json("classes.json", classes_data)
-    
-    print("\n✅ Done!")
+    print("\nDone!")
 
 
 if __name__ == "__main__":

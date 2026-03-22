@@ -1,0 +1,12 @@
+name = "autoarboxbot"
+main = "index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "ARBOX_KV"
+id      = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+GITHUB_REPO   = "OhadEitan/AutoArboxBot"
+GITHUB_BRANCH = "main"
