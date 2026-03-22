@@ -1,0 +1,121 @@
+name: Process Telegram Commands
+
+on:
+  # Run every 2 minutes to check for new commands
+  schedule:
+    - cron: '*/2 * * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  process-commands:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Process Telegram commands
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          python << 'EOF'
+          import os
+          import sys
+          sys.path.insert(0, '.')
+
+          from src.multi_user_bot import (
+              load_users, save_users, process_command, send_message
+          )
+
+          import requests
+
+          TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+          OFFSET_FILE = '.telegram_offset'
+
+          if not TOKEN:
+              print("No bot token configured")
+              exit(0)
+
+          def load_offset():
+              if os.path.exists(OFFSET_FILE):
+                  with open(OFFSET_FILE) as f:
+                      try:
+                          return int(f.read().strip())
+                      except:
+                          return 0
+              return 0
+
+          def save_offset(offset):
+              with open(OFFSET_FILE, 'w') as f:
+                  f.write(str(offset))
+
+          # Get updates from Telegram
+          offset = load_offset()
+          url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
+          params = {"offset": offset, "timeout": 0}
+
+          try:
+              resp = requests.get(url, params=params, timeout=30)
+              data = resp.json()
+          except Exception as e:
+              print(f"Error getting updates: {e}")
+              exit(0)
+
+          if not data.get('ok'):
+              print("Failed to get updates")
+              exit(0)
+
+          updates = data.get('result', [])
+          print(f"Processing {len(updates)} update(s)")
+
+          data_changed = False
+
+          for update in updates:
+              update_id = update['update_id']
+              message = update.get('message', {})
+              chat_id = str(message.get('chat', {}).get('id', ''))
+              text = message.get('text', '')
+              username = message.get('from', {}).get('first_name', '')
+
+              if not chat_id or not text:
+                  save_offset(update_id + 1)
+                  continue
+
+              print(f"From {chat_id} ({username}): {text[:50]}...")
+
+              if text.startswith('/'):
+                  response = process_command(chat_id, text, username)
+                  if response:
+                      send_message(chat_id, response)
+                      # Check if this was a data-changing command
+                      if any(text.startswith(cmd) for cmd in ['/setcreds', '/setid', '/add', '/remove', '/toggle', '/clear', '/delete']):
+                          data_changed = True
+
+              save_offset(update_id + 1)
+
+          # Output for commit step
+          with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+              f.write(f"data_changed={'true' if data_changed else 'false'}\n")
+          EOF
+
+      - name: Commit changes
+        run: |
+          git config user.name "AutoArboxBot"
+          git config user.email "bot@autoarbox.com"
+          git add users.json .telegram_offset 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "Update user data via Telegram"
+            git push
+          else
+            echo "No changes to commit"
+          fi

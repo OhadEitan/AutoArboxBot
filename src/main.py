@@ -3,11 +3,16 @@
 AutoArboxBot - Automatic Arbox Class Registration
 
 Usage:
-    python -m src.main setup          # Initial setup (credentials + targets)
-    python -m src.main run            # Run the bot
-    python -m src.main status         # Check current status
-    python -m src.main targets        # Manage target sessions
-    python -m src.main test           # Test registration (dry run)
+    python -m src.main setup              # Initial setup (credentials + targets)
+    python -m src.main run                # Run the bot
+    python -m src.main status             # Check current status
+    python -m src.main targets            # Manage target sessions
+    python -m src.main test               # Test registration (dry run)
+    python -m src.main workouts           # Show upcoming workouts (96 hours)
+    python -m src.main my-registrations   # Show my registered sessions
+    python -m src.main register <id>      # Register for a workout
+    python -m src.main cancel <id>        # Cancel a registration
+    python -m src.main waitlist           # Show my waitlist positions
 """
 
 import sys
@@ -306,6 +311,311 @@ def cmd_test(args):
     print("\n✅ Test complete! Everything is working.")
 
 
+def is_hebrew_char(char: str) -> bool:
+    """Check if a character is Hebrew."""
+    return '\u0590' <= char <= '\u05FF'
+
+
+def fix_hebrew(text: str) -> str:
+    """Fix Hebrew text for proper terminal display.
+
+    Reverses Hebrew portions while keeping English portions intact.
+    """
+    if not any(is_hebrew_char(c) for c in text):
+        return text
+
+    # Split into segments of Hebrew and non-Hebrew
+    segments = []
+    current = []
+    current_is_hebrew = None
+
+    for char in text:
+        char_is_hebrew = is_hebrew_char(char)
+        if current_is_hebrew is None:
+            current_is_hebrew = char_is_hebrew
+
+        if char_is_hebrew == current_is_hebrew:
+            current.append(char)
+        else:
+            segments.append((''.join(current), current_is_hebrew))
+            current = [char]
+            current_is_hebrew = char_is_hebrew
+
+    if current:
+        segments.append((''.join(current), current_is_hebrew))
+
+    # Reverse Hebrew segments, keep others as-is, then reverse order of all segments
+    result = []
+    for seg, is_heb in reversed(segments):
+        if is_heb:
+            result.append(seg[::-1])
+        else:
+            result.append(seg)
+
+    return ''.join(result)
+
+
+def cmd_workouts(args):
+    """Handle workouts command - show upcoming workouts within 96 hours."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print("\n=== Upcoming Workouts (96 hours) ===\n")
+    print("Logging in...")
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    workouts = client.get_upcoming_workouts(
+        locations_box_id=config.locations_box_id,
+        boxes_id=config.boxes_id,
+        hours=args.hours,
+    )
+
+    if not workouts:
+        print("No upcoming workouts found.")
+        return
+
+    print(f"Found {len(workouts)} workouts:\n")
+    print(f"{'ID':<8} {'Date':<12} {'Time':<6} {'Name':<20} {'Trainer':<20} {'Spots':<10} {'Reg'}")
+    print("-" * 85)
+
+    for w in workouts:
+        participants = f"{w['participants']}/{w['max_participants']}"
+        name = fix_hebrew(w['name'])
+        trainer = fix_hebrew(w['trainer'])
+        status = "✓" if w['is_registered'] else ""
+        print(f"{w['id']:<8} {w['date']:<12} {w['time']:<6} {name:<20} {trainer:<20} {participants:<10} {status}")
+
+
+def cmd_my_registrations(args):
+    """Handle my-registrations command - show sessions user is registered for."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print("\n=== My Registrations ===\n")
+    print("Logging in...")
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    registrations = client.get_my_registrations(
+        locations_box_id=config.locations_box_id,
+        boxes_id=config.boxes_id,
+    )
+
+    if not registrations:
+        print("No upcoming registrations found.")
+        return
+
+    print(f"Found {len(registrations)} registrations:\n")
+    print(f"{'ID':<8} {'Date':<12} {'Time':<6} {'Name':<20} {'Trainer':<20} {'Participants':<12}")
+    print("-" * 85)
+
+    for r in registrations:
+        participants = f"{r['participants']}/{r['max_participants']}"
+        name = fix_hebrew(r['name'])
+        trainer = fix_hebrew(r['trainer'])
+        print(f"{r['id']:<8} {r['date']:<12} {r['time']:<6} {name:<20} {trainer:<20} {participants:<12}")
+
+
+def cmd_register(args):
+    """Handle register command - register for a specific workout."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print(f"\n=== Register for Workout {args.workout_id} ===\n")
+    print("Logging in...")
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    result = client.register(
+        schedule_id=args.workout_id,
+        membership_user_id=config.membership_user_id,
+    )
+
+    if result.success:
+        print(f"✅ {result.message}")
+    else:
+        print(f"❌ {result.message}")
+
+
+def cmd_book(args):
+    """Handle book command - register by day, time, and session name."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print(f"\n=== Book Session ===\n")
+    print(f"Looking for: {args.name} on {DAY_NAMES.get(args.day, args.day)} at {args.time}")
+    print("Logging in...")
+
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    # Get upcoming workouts
+    workouts = client.get_upcoming_workouts(
+        locations_box_id=config.locations_box_id,
+        boxes_id=config.boxes_id,
+        hours=168,  # Look ahead 7 days
+    )
+
+    # Find matching workout
+    matching = None
+    for w in workouts:
+        # Parse date to get day of week
+        from datetime import datetime
+        workout_date = datetime.strptime(w['date'], "%Y-%m-%d")
+        workout_day = workout_date.weekday()
+        # Convert to Sunday=0 format (Israeli week)
+        workout_day = (workout_day + 1) % 7
+
+        if (
+            args.name.lower() in w['name'].lower()
+            and workout_day == args.day
+            and w['time'] == args.time
+        ):
+            matching = w
+            break
+
+    if not matching:
+        print(f"\n❌ No matching session found.")
+        print(f"   Make sure the session exists in the next 7 days.")
+        return
+
+    print(f"\nFound: {matching['name']} on {matching['date']} at {matching['time']}")
+    available = matching['max_participants'] - matching['participants']
+    print(f"       Trainer: {matching['trainer']}, Spots: {available}/{matching['max_participants']}")
+    print(f"       ID: {matching['id']}")
+
+    # Register
+    print("\nRegistering...")
+    result = client.register(
+        schedule_id=matching['id'],
+        membership_user_id=config.membership_user_id,
+    )
+
+    if result.success:
+        print(f"✅ {result.message}")
+    else:
+        print(f"❌ {result.message}")
+
+
+def cmd_cancel(args):
+    """Handle cancel command - cancel a registration or waitlist entry."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print(f"\n=== Cancel Registration ===\n")
+    print("Logging in...")
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    # First check regular registrations
+    registrations = client.get_my_registrations(
+        locations_box_id=config.locations_box_id,
+        boxes_id=config.boxes_id,
+    )
+
+    workout_info = None
+    is_waitlist = False
+
+    for r in registrations:
+        if r['id'] == args.workout_id:
+            workout_info = r
+            break
+
+    # If not found in registrations, check waitlist
+    if not workout_info:
+        waitlist = client.get_waitlist_positions(
+            locations_box_id=config.locations_box_id,
+            boxes_id=config.boxes_id,
+        )
+        for w in waitlist:
+            if w['id'] == args.workout_id:
+                workout_info = w
+                is_waitlist = True
+                break
+
+    if not workout_info:
+        print(f"❌ You are not registered or on waitlist for workout {args.workout_id}")
+        return
+
+    if is_waitlist:
+        print(f"Cancelling waitlist (position #{workout_info.get('position', '?')}): {workout_info['name']} on {workout_info['date']} at {workout_info['time']}")
+        success = client.cancel_waitlist(
+            schedule_id=args.workout_id,
+            schedule_standby_id=workout_info['schedule_standby_id'],
+            membership_user_id=config.membership_user_id,
+        )
+    else:
+        print(f"Cancelling: {workout_info['name']} on {workout_info['date']} at {workout_info['time']}")
+        success = client.cancel_registration(
+            schedule_id=args.workout_id,
+            schedule_user_id=workout_info['schedule_user_id'],
+            membership_user_id=config.membership_user_id,
+        )
+
+    if success:
+        print("✅ Cancelled successfully")
+    else:
+        if is_waitlist:
+            print("❌ Failed to cancel waitlist. Please use the Arbox app to cancel waitlist entries.")
+        else:
+            print("❌ Failed to cancel")
+
+
+def cmd_waitlist(args):
+    """Handle waitlist command - show sessions user is on waitlist for."""
+    config = load_user_config()
+    if not config:
+        print("❌ Not configured. Run 'setup' first.")
+        return
+
+    print("\n=== My Waitlist ===\n")
+    print("Logging in...")
+    client = ArboxClient(config.email, config.password)
+    if not client.login():
+        print("❌ Login failed.")
+        return
+
+    waitlist = client.get_waitlist_positions(
+        locations_box_id=config.locations_box_id,
+        boxes_id=config.boxes_id,
+    )
+
+    if not waitlist:
+        print("You are not on any waitlists.")
+        return
+
+    print(f"Found {len(waitlist)} waitlist entries:\n")
+    print(f"{'ID':<10} {'Date':<12} {'Time':<6} {'Name':<20} {'Trainer':<20} {'Position':<8}")
+    print("-" * 80)
+
+    for w in waitlist:
+        name = fix_hebrew(w['name'])
+        trainer = fix_hebrew(w['trainer'])
+        position = f"#{w['position']}" if w.get('position') else "?"
+        print(f"{w['id']:<10} {w['date']:<12} {w['time']:<6} {name:<20} {trainer:<20} {position:<8}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="AutoArboxBot - Automatic Arbox Class Registration"
@@ -333,6 +643,55 @@ def main():
     # Test command
     subparsers.add_parser("test", help="Test connection (dry run)")
 
+    # Workouts command
+    workouts_parser = subparsers.add_parser("workouts", help="Show upcoming workouts")
+    workouts_parser.add_argument(
+        "--hours",
+        type=int,
+        default=96,
+        help="Hours to look ahead (default: 96)",
+    )
+
+    # My registrations command
+    subparsers.add_parser("my-registrations", help="Show my registered sessions")
+
+    # Register command
+    register_parser = subparsers.add_parser("register", help="Register for a workout")
+    register_parser.add_argument(
+        "workout_id",
+        type=int,
+        help="Workout ID to register for",
+    )
+
+    # Cancel command
+    cancel_parser = subparsers.add_parser("cancel", help="Cancel a registration")
+    cancel_parser.add_argument(
+        "workout_id",
+        type=int,
+        help="Workout ID to cancel",
+    )
+
+    # Waitlist command
+    subparsers.add_parser("waitlist", help="Show my waitlist positions")
+
+    # Book command (register by day/time/name)
+    book_parser = subparsers.add_parser("book", help="Book by day, time, and name")
+    book_parser.add_argument(
+        "day",
+        type=int,
+        help="Day of week (0=Sunday, 1=Monday, ..., 6=Saturday)",
+    )
+    book_parser.add_argument(
+        "time",
+        type=str,
+        help="Time (HH:MM format, e.g., 18:00)",
+    )
+    book_parser.add_argument(
+        "name",
+        type=str,
+        help="Session name (e.g., CrossFit)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -345,6 +704,18 @@ def main():
         cmd_targets(args)
     elif args.command == "test":
         cmd_test(args)
+    elif args.command == "workouts":
+        cmd_workouts(args)
+    elif args.command == "my-registrations":
+        cmd_my_registrations(args)
+    elif args.command == "register":
+        cmd_register(args)
+    elif args.command == "cancel":
+        cmd_cancel(args)
+    elif args.command == "waitlist":
+        cmd_waitlist(args)
+    elif args.command == "book":
+        cmd_book(args)
     else:
         parser.print_help()
 

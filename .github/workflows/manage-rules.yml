@@ -1,0 +1,203 @@
+name: Manage Rules
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - list
+          - add
+          - remove
+          - toggle
+          - register-now
+
+      name:
+        description: 'Session name (for add action)'
+        required: false
+        default: 'CrossFit'
+
+      day:
+        description: 'Day of week 0-6 (0=Sun, for add action)'
+        required: false
+        default: '0'
+
+      time:
+        description: 'Time HH:MM (for add action)'
+        required: false
+        default: '18:00'
+
+      rule_number:
+        description: 'Rule number (for remove/toggle action)'
+        required: false
+        default: '1'
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: List rules
+        if: inputs.action == 'list'
+        run: |
+          echo "=== Current Rules ==="
+          if [ -f targets.json ]; then
+            python -c "
+          import json
+          with open('targets.json') as f:
+              rules = json.load(f)
+          days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+          if not rules:
+              print('No rules configured.')
+          for i, r in enumerate(rules, 1):
+              status = 'ON' if r.get('enabled', True) else 'OFF'
+              day = days[r['day_of_week']]
+              print(f'{i}. [{status}] {r[\"name\"]} - {day} {r[\"time\"]}')
+          "
+          else
+            echo "No rules configured."
+          fi
+
+      - name: Add rule
+        if: inputs.action == 'add'
+        run: |
+          python -c "
+          import json
+          import os
+
+          # Load existing rules
+          rules = []
+          if os.path.exists('targets.json'):
+              with open('targets.json') as f:
+                  rules = json.load(f)
+
+          # Add new rule
+          rules.append({
+              'name': '${{ inputs.name }}',
+              'day_of_week': int('${{ inputs.day }}'),
+              'time': '${{ inputs.time }}',
+              'enabled': True
+          })
+
+          # Save
+          with open('targets.json', 'w') as f:
+              json.dump(rules, f, indent=2)
+
+          print(f'Added rule: ${{ inputs.name }} on day ${{ inputs.day }} at ${{ inputs.time }}')
+          "
+
+      - name: Remove rule
+        if: inputs.action == 'remove'
+        run: |
+          python -c "
+          import json
+
+          with open('targets.json') as f:
+              rules = json.load(f)
+
+          index = int('${{ inputs.rule_number }}') - 1
+          if 0 <= index < len(rules):
+              removed = rules.pop(index)
+              with open('targets.json', 'w') as f:
+                  json.dump(rules, f, indent=2)
+              print(f'Removed rule: {removed[\"name\"]}')
+          else:
+              print(f'Invalid rule number: ${{ inputs.rule_number }}')
+          "
+
+      - name: Toggle rule
+        if: inputs.action == 'toggle'
+        run: |
+          python -c "
+          import json
+
+          with open('targets.json') as f:
+              rules = json.load(f)
+
+          index = int('${{ inputs.rule_number }}') - 1
+          if 0 <= index < len(rules):
+              rules[index]['enabled'] = not rules[index].get('enabled', True)
+              with open('targets.json', 'w') as f:
+                  json.dump(rules, f, indent=2)
+              status = 'enabled' if rules[index]['enabled'] else 'disabled'
+              print(f'Rule {index + 1} is now {status}')
+          else:
+              print(f'Invalid rule number: ${{ inputs.rule_number }}')
+          "
+
+      - name: Commit changes
+        if: inputs.action == 'add' || inputs.action == 'remove' || inputs.action == 'toggle'
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add targets.json
+          git diff --staged --quiet || git commit -m "Update rules via workflow: ${{ inputs.action }}"
+          git push
+
+      - name: Register now
+        if: inputs.action == 'register-now'
+        env:
+          ARBOX_EMAIL: ${{ secrets.ARBOX_EMAIL }}
+          ARBOX_PASSWORD: ${{ secrets.ARBOX_PASSWORD }}
+          ARBOX_MEMBERSHIP_USER_ID: ${{ secrets.ARBOX_MEMBERSHIP_USER_ID }}
+          ARBOX_LOCATIONS_BOX_ID: ${{ secrets.ARBOX_LOCATIONS_BOX_ID }}
+          ARBOX_BOXES_ID: ${{ secrets.ARBOX_BOXES_ID }}
+          ARBOX_TARGETS: ${{ secrets.ARBOX_TARGETS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          pip install requests python-dotenv
+          python -m src.auto_register
+
+      - name: Send Telegram notification
+        if: always() && (inputs.action == 'add' || inputs.action == 'remove' || inputs.action == 'toggle')
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            python -c "
+          import os
+          import requests
+          import json
+
+          token = os.environ['TELEGRAM_BOT_TOKEN']
+          chat_id = os.environ['TELEGRAM_CHAT_ID']
+
+          # Load current rules
+          rules = []
+          if os.path.exists('targets.json'):
+              with open('targets.json') as f:
+                  rules = json.load(f)
+
+          days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+          rules_text = '\n'.join([
+              f\"{i}. [{'ON' if r.get('enabled', True) else 'OFF'}] {r['name']} - {days[r['day_of_week']]} {r['time']}\"
+              for i, r in enumerate(rules, 1)
+          ]) or 'No rules configured.'
+
+          message = f'''<b>Rules Updated</b>
+
+          Action: ${{ inputs.action }}
+
+          <b>Current Rules:</b>
+          {rules_text}'''
+
+          url = f'https://api.telegram.org/bot{token}/sendMessage'
+          requests.post(url, json={
+              'chat_id': chat_id,
+              'text': message,
+              'parse_mode': 'HTML'
+          })
+          "
+          fi

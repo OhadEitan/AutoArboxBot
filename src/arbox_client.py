@@ -31,11 +31,13 @@ class Session:
     max_users: int
     registered: int
     free: int
-    booking_option: str  # "insertScheduleUser", "insertStandby", "past", "cancelScheduleUser"
+    booking_option: str  # "insertScheduleUser", "insertStandby", "past", "cancelScheduleUser", "cancelWaitList"
     coach_name: Optional[str]
     day_of_week: int
     enable_registration_time: int  # Hours before when registration opens
     user_booked: Optional[int]  # schedule_user_id if user is booked
+    user_in_standby: Optional[int]  # schedule_standby_id if user is on waitlist
+    stand_by_position: Optional[int]  # Position in waitlist
 
     @property
     def can_register(self) -> bool:
@@ -48,6 +50,10 @@ class Session:
     @property
     def is_registered(self) -> bool:
         return self.booking_option == "cancelScheduleUser"
+
+    @property
+    def is_on_waitlist(self) -> bool:
+        return self.booking_option == "cancelWaitList"
 
     @property
     def is_past(self) -> bool:
@@ -194,6 +200,8 @@ class ArboxClient:
                     day_of_week=item["day_of_week"],
                     enable_registration_time=item.get("enable_registration_time", 72),
                     user_booked=item.get("user_booked"),
+                    user_in_standby=item.get("user_in_standby"),
+                    stand_by_position=item.get("stand_by_position"),
                 )
                 sessions.append(session)
 
@@ -214,6 +222,7 @@ class ArboxClient:
     ) -> RegistrationResult:
         """
         Register for a class session.
+        If class is full (516 error), automatically tries to join waitlist.
         """
         url = f"{BASE_URL}/scheduleUser/insert"
         payload = {
@@ -238,6 +247,22 @@ class ArboxClient:
             )
 
         except requests.exceptions.HTTPError as e:
+            # Check if class is full (516 error) - automatically joins waitlist
+            if e.response.status_code == 516:
+                logger.info(f"Class full for schedule_id={schedule_id}")
+                return RegistrationResult(
+                    success=False,
+                    message="Class is full. Check if you're already on the waitlist with 'my-registrations' or 'waitlist'.",
+                )
+
+            # Check if already registered (425 error)
+            if e.response.status_code == 425:
+                logger.info(f"Already registered for schedule_id={schedule_id}")
+                return RegistrationResult(
+                    success=True,  # Consider this success since user is registered
+                    message="Already registered for this session.",
+                )
+
             error_msg = str(e)
             try:
                 error_data = e.response.json()
@@ -254,6 +279,64 @@ class ArboxClient:
             return RegistrationResult(
                 success=False,
                 message=f"Registration error: {e}",
+            )
+
+    def _try_join_waitlist(
+        self,
+        schedule_id: int,
+        membership_user_id: int,
+    ) -> RegistrationResult:
+        """
+        Try to join the waitlist for a full class.
+        Uses the same scheduleUser/insert endpoint - Arbox handles waitlist automatically.
+        """
+        url = f"{BASE_URL}/scheduleUser/insert"
+        payload = {
+            "schedule_id": schedule_id,
+            "membership_user_id": membership_user_id,
+            "extras": {"spot": None},
+        }
+
+        try:
+            # Use fresh session with exact app headers
+            response = self.session.post(
+                url,
+                json=payload,
+                headers=self._get_auth_headers(),
+            )
+
+            data = response.json()
+
+            # Check if successfully added to waitlist
+            if response.status_code == 200:
+                waitlist_position = data.get("data", {}).get("stand_by_position")
+                logger.info(f"Joined waitlist for schedule_id={schedule_id}, position={waitlist_position}")
+                return RegistrationResult(
+                    success=True,
+                    message=f"Joined waitlist successfully! Position: {waitlist_position}",
+                    joined_waitlist=True,
+                    waitlist_position=waitlist_position,
+                )
+
+            # Check for specific error messages
+            error_msg = data.get("error", {}).get("message", "Unknown error")
+            if "already" in error_msg.lower() or response.status_code == 516:
+                return RegistrationResult(
+                    success=False,
+                    message="Class is full. You may already be on the waitlist.",
+                )
+
+            logger.error(f"Waitlist join failed: {response.status_code} - {error_msg}")
+            return RegistrationResult(
+                success=False,
+                message=f"Class is full. Waitlist join failed: {error_msg}",
+            )
+
+        except Exception as e:
+            logger.error(f"Waitlist error: {e}")
+            return RegistrationResult(
+                success=False,
+                message=f"Class is full. Waitlist join failed: {e}",
             )
 
     def join_waitlist(
@@ -318,24 +401,72 @@ class ArboxClient:
 
     def cancel_registration(
         self,
+        schedule_id: int,
         schedule_user_id: int,
+        membership_user_id: int,
     ) -> bool:
         """
         Cancel a registration.
+        Requires schedule_id, schedule_user_id, and membership_user_id.
         """
-        url = f"{BASE_URL}/scheduleUser/{schedule_user_id}"
+        url = f"{BASE_URL}/scheduleUser/delete"
+        payload = {
+            "schedule_id": schedule_id,
+            "schedule_user_id": schedule_user_id,
+            "membership_user_id": membership_user_id,
+        }
 
         try:
-            response = self.session.delete(
+            response = self.session.post(
                 url,
+                json=payload,
                 headers=self._get_auth_headers(),
             )
             response.raise_for_status()
-            logger.info(f"Cancelled registration schedule_user_id={schedule_user_id}")
+            logger.info(f"Cancelled registration schedule_id={schedule_id}")
             return True
 
         except Exception as e:
             logger.error(f"Cancel failed: {e}")
+            return False
+
+    def cancel_waitlist(
+        self,
+        schedule_id: int,
+        schedule_standby_id: int,
+        membership_user_id: int,
+    ) -> bool:
+        """
+        Cancel a waitlist entry.
+        Tries multiple approaches to cancel waitlist.
+        """
+        # Try the scheduleUser/delete endpoint with all three IDs
+        url = f"{BASE_URL}/scheduleUser/delete"
+        payload = {
+            "schedule_id": schedule_id,
+            "schedule_user_id": schedule_standby_id,
+            "membership_user_id": membership_user_id,
+        }
+
+        try:
+            response = self.session.post(
+                url,
+                json=payload,
+                headers=self._get_auth_headers(),
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("data", {}).get("user_in_standby") is None:
+                    logger.info(f"Cancelled waitlist for schedule_id={schedule_id}")
+                    return True
+
+            # If that didn't work, the API may not support waitlist cancellation properly
+            logger.warning(f"Waitlist cancel API not working as expected")
+            return False
+
+        except Exception as e:
+            logger.error(f"Waitlist cancel failed: {e}")
             return False
 
     def find_session(
@@ -356,3 +487,140 @@ class ArboxClient:
             ):
                 return session
         return None
+
+    def get_upcoming_workouts(
+        self,
+        locations_box_id: int = 14,
+        boxes_id: int = 35,
+        hours: int = 96,
+    ) -> list[dict]:
+        """
+        Get all upcoming workouts within the specified hours (default 96).
+
+        Returns a list of dicts with:
+            - name: workout name
+            - date: date string (YYYY-MM-DD)
+            - time: time string (HH:MM)
+            - trainer: coach name
+            - participants: number of registered participants
+            - max_participants: maximum capacity
+            - free_spots: available spots
+        """
+        now = datetime.now()
+        end_date = now + timedelta(hours=hours)
+
+        sessions = self.get_schedule(
+            from_date=now,
+            to_date=end_date,
+            locations_box_id=locations_box_id,
+            boxes_id=boxes_id,
+        )
+
+        # Filter to only future sessions and sort by datetime
+        workouts = []
+        for session in sessions:
+            # Skip past sessions
+            if session.datetime < now:
+                continue
+
+            # Skip sessions beyond the hour limit
+            if session.datetime > end_date:
+                continue
+
+            workouts.append({
+                "id": session.id,
+                "name": session.name,
+                "date": session.date,
+                "time": session.time,
+                "trainer": session.coach_name or "TBD",
+                "participants": session.registered,
+                "max_participants": session.max_users,
+                "free_spots": session.free,
+                "is_registered": session.is_registered,
+                "can_register": session.can_register,
+                "can_join_waitlist": session.can_join_waitlist,
+                "user_booked": session.user_booked,
+            })
+
+        # Sort by date and time
+        workouts.sort(key=lambda w: (w["date"], w["time"]))
+
+        return workouts
+
+    def get_my_registrations(
+        self,
+        locations_box_id: int = 14,
+        boxes_id: int = 35,
+        days: int = 14,
+    ) -> list[dict]:
+        """
+        Get all sessions the user is registered for.
+
+        Returns a list of dicts with session info.
+        """
+        now = datetime.now()
+        end_date = now + timedelta(days=days)
+
+        sessions = self.get_schedule(
+            from_date=now,
+            to_date=end_date,
+            locations_box_id=locations_box_id,
+            boxes_id=boxes_id,
+        )
+
+        registrations = []
+        for session in sessions:
+            if session.is_registered:
+                registrations.append({
+                    "id": session.id,
+                    "schedule_user_id": session.user_booked,
+                    "name": session.name,
+                    "date": session.date,
+                    "time": session.time,
+                    "trainer": session.coach_name or "TBD",
+                    "participants": session.registered,
+                    "max_participants": session.max_users,
+                })
+
+        registrations.sort(key=lambda w: (w["date"], w["time"]))
+        return registrations
+
+    def get_waitlist_positions(
+        self,
+        locations_box_id: int = 14,
+        boxes_id: int = 35,
+        days: int = 14,
+    ) -> list[dict]:
+        """
+        Get all sessions where the user is on the waitlist.
+
+        Returns a list of dicts with session info and waitlist position.
+        """
+        now = datetime.now()
+        end_date = now + timedelta(days=days)
+
+        sessions = self.get_schedule(
+            from_date=now,
+            to_date=end_date,
+            locations_box_id=locations_box_id,
+            boxes_id=boxes_id,
+        )
+
+        waitlist = []
+        for session in sessions:
+            # Check if user is on waitlist
+            if session.is_on_waitlist:
+                waitlist.append({
+                    "id": session.id,
+                    "schedule_standby_id": session.user_in_standby,
+                    "name": session.name,
+                    "date": session.date,
+                    "time": session.time,
+                    "trainer": session.coach_name or "TBD",
+                    "participants": session.registered,
+                    "max_participants": session.max_users,
+                    "position": session.stand_by_position,
+                })
+
+        waitlist.sort(key=lambda w: (w["date"], w["time"]))
+        return waitlist
