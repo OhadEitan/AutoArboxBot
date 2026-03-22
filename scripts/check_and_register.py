@@ -40,6 +40,20 @@ def load_json(filename):
         return json.load(f)
 
 
+def load_json_from_worker(endpoint):
+    """Load JSON data from the Worker (which reads from GitHub)."""
+    if WORKER_URL and WORKER_KEY:
+        try:
+            url = f"{WORKER_URL.rstrip('/')}/{endpoint}"
+            resp = requests.get(url, headers={"X-Worker-Key": WORKER_KEY}, timeout=10)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as e:
+            print(f"   Worker fetch {endpoint} failed: {e}")
+    # Fall back to local file
+    return load_json(f"{endpoint}.json")
+
+
 def save_json(filename, data):
     filepath = DATA_DIR / filename
     with open(filepath, "w") as f:
@@ -219,8 +233,9 @@ def main():
     print(f"⏰ Running at {now.strftime('%Y-%m-%d %H:%M:%S')} (Israel time)")
     print(f"   Day: {DAY_NAMES[(now.weekday() + 1) % 7]} (index {(now.weekday() + 1) % 7})")
 
-    users_data = load_json("users.json")
-    rules_data = load_json("rules.json")
+    # Fetch users and rules from Worker (reads GitHub via API, always fresh)
+    users_data = load_json_from_worker("users")
+    rules_data = load_json_from_worker("rules")
     classes_data = load_json("classes.json")
 
     users = users_data.get("users", {})
@@ -299,7 +314,7 @@ def main():
         classes_data["classes"][user_id] = registered
         print(f"   {user_profile['name']}: {len(registered)} classes")
 
-    save_json("rules.json", rules_data)
+    # Only save classes.json — rules are managed by the Worker/PWA
     save_json("classes.json", classes_data)
     print("\nDone!")
 

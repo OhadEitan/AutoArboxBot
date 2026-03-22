@@ -38,6 +38,6 @@ jobs:
         run: |
           git config user.name "AutoArboxBot"
           git config user.email "bot@autoarbox.dev"
-          git add data/rules.json data/classes.json
-          git diff --cached --quiet || git commit -m "Update rules and classes [skip ci]"
+          git add data/classes.json
+          git diff --cached --quiet || git commit -m "Update classes [skip ci]"
           git push
