@@ -24,6 +24,7 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import aiohttp
 
 # Import from src
 import sys
@@ -166,17 +167,20 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📖 *AutoArboxBot Help*\n\n"
         "*Setup:*\n"
         "`/setup` - Set your Arbox credentials\n\n"
-        "*Rules:*\n"
-        "`/add Wed 18:00` - Add a workout\n"
-        "`/rules` - List your rules\n"
-        "`/toggle <id>` - Enable/disable rule\n"
+        "*View:*\n"
+        "`/myclasses` - Your registrations\n"
+        "`/schedule` - Available classes\n"
+        "`/rules` - Your auto-register rules\n\n"
+        "*Actions:*\n"
+        "`/add Wed 18:00` - Auto-register weekly\n"
+        "`/register Wed 18:00` - Register now\n"
+        "`/cancel` - Cancel a registration\n\n"
+        "*Manage Rules:*\n"
+        "`/toggle <id>` - Enable/disable\n"
         "`/remove <id>` - Delete rule\n\n"
         "*Other:*\n"
-        "`/test` - Test Arbox connection\n"
-        "`/status` - Your status\n\n"
-        "*Example:*\n"
-        "`/add Wednesday 18:00`\n"
-        "→ Bot registers you 72h before (Sunday 18:00)",
+        "`/test` - Test connection\n"
+        "`/status` - Your status",
         parse_mode="Markdown",
     )
 
@@ -232,7 +236,259 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-async def cmd_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def cmd_myclasses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show user's current registrations from Arbox."""
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Use /setup first.")
+        return
+
+    await update.message.reply_text("🔄 Fetching your registrations...")
+
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await update.message.reply_text("❌ Login failed!")
+        return
+
+    now = datetime.now(ISRAEL_TZ)
+    sessions = client.get_schedule(
+        from_date=now,
+        to_date=now + timedelta(days=14),
+        locations_box_id=user.get("locations_box_id", 14),
+    )
+
+    # Filter to registered sessions only
+    registered = [s for s in sessions if s.is_registered]
+
+    if not registered:
+        await update.message.reply_text("📭 You have no upcoming registrations.")
+        return
+
+    msg = "📅 *Your Registrations*\n\n"
+    for s in registered:
+        day = DAY_NAMES[s.day_of_week]
+        msg += f"✅ {s.name} - {day} {s.date} {s.time}\n"
+
+    msg += f"\n_Total: {len(registered)} classes_"
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show available classes for the week."""
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Use /setup first.")
+        return
+
+    await update.message.reply_text("🔄 Fetching schedule...")
+
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await update.message.reply_text("❌ Login failed!")
+        return
+
+    now = datetime.now(ISRAEL_TZ)
+    sessions = client.get_schedule(
+        from_date=now,
+        to_date=now + timedelta(days=7),
+        locations_box_id=user.get("locations_box_id", 14),
+    )
+
+    # Filter to CrossFit and not past
+    crossfit = [s for s in sessions if s.name.lower() == "crossfit" and not s.is_past]
+
+    if not crossfit:
+        await update.message.reply_text("📭 No upcoming CrossFit classes found.")
+        return
+
+    msg = "🏋️ *CrossFit Schedule*\n\n"
+    current_date = ""
+    for s in crossfit[:20]:  # Limit to 20
+        day = DAY_NAMES[s.day_of_week]
+        
+        # Group by date
+        if s.date != current_date:
+            current_date = s.date
+            msg += f"\n*{day} {s.date}*\n"
+        
+        if s.is_registered:
+            status = "✅ Registered"
+        elif s.can_register:
+            status = f"🟢 {s.free} spots"
+        elif s.can_join_waitlist:
+            status = "🟡 Waitlist"
+        else:
+            status = "⏳ Not open"
+        
+        msg += f"  {s.time} - {status}\n"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel a registration. Usage: /cancel or interactive."""
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Use /setup first.")
+        return
+
+    await update.message.reply_text("🔄 Fetching your registrations...")
+
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await update.message.reply_text("❌ Login failed!")
+        return
+
+    now = datetime.now(ISRAEL_TZ)
+    sessions = client.get_schedule(
+        from_date=now,
+        to_date=now + timedelta(days=14),
+        locations_box_id=user.get("locations_box_id", 14),
+    )
+
+    # Filter to registered sessions only
+    registered = [s for s in sessions if s.is_registered and not s.is_past]
+
+    if not registered:
+        await update.message.reply_text("📭 You have no upcoming registrations to cancel.")
+        return
+
+    # Create buttons for each registration
+    keyboard = []
+    for s in registered[:8]:  # Max 8 buttons
+        day = DAY_NAMES[s.day_of_week]
+        keyboard.append([
+            InlineKeyboardButton(
+                f"❌ {s.name} {day} {s.time}",
+                callback_data=f"cancel_{s.user_booked}"
+            )
+        ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Never mind", callback_data="cancel_none")])
+
+    await update.message.reply_text(
+        "🗑️ *Cancel Registration*\n\nWhich class do you want to cancel?",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def handle_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle cancel button press."""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    if query.data == "cancel_none":
+        await query.edit_message_text("👍 OK, nothing cancelled.")
+        return
+    
+    schedule_user_id = int(query.data.replace("cancel_", ""))
+    
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await query.edit_message_text("❌ Login failed!")
+        return
+    
+    if client.cancel_registration(schedule_user_id):
+        await query.edit_message_text("✅ Registration cancelled!")
+    else:
+        await query.edit_message_text("❌ Failed to cancel. Try again later.")
+
+
+async def cmd_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manually register for a class. Usage: /register <day> <time>"""
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Use /setup first.")
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "📝 *Register Now*\n\n"
+            "Usage: `/register <day> <time>`\n\n"
+            "Example: `/register Wed 18:00`",
+            parse_mode="Markdown",
+        )
+        return
+    
+    day_input = context.args[0].lower()
+    time_input = context.args[1]
+    
+    day_map = {
+        "sun": 0, "sunday": 0,
+        "mon": 1, "monday": 1,
+        "tue": 2, "tuesday": 2,
+        "wed": 3, "wednesday": 3,
+        "thu": 4, "thursday": 4,
+        "fri": 5, "friday": 5,
+        "sat": 6, "saturday": 6,
+    }
+    
+    target_day = day_map.get(day_input)
+    if target_day is None:
+        await update.message.reply_text(f"❌ Unknown day: {day_input}")
+        return
+    
+    await update.message.reply_text("🔄 Registering...")
+    
+    client = ArboxClient(user["email"], user["password"])
+    if not client.login():
+        await update.message.reply_text("❌ Login failed!")
+        return
+    
+    now = datetime.now(ISRAEL_TZ)
+    sessions = client.get_schedule(
+        from_date=now,
+        to_date=now + timedelta(days=7),
+        locations_box_id=user.get("locations_box_id", 14),
+    )
+    
+    # Find the session
+    target = None
+    for s in sessions:
+        if (
+            s.name.lower() == "crossfit"
+            and s.day_of_week == target_day
+            and s.time == time_input
+            and not s.is_past
+        ):
+            target = s
+            break
+    
+    if not target:
+        await update.message.reply_text(f"❌ Session not found: CrossFit {DAY_NAMES[target_day]} {time_input}")
+        return
+    
+    if target.is_registered:
+        await update.message.reply_text(f"✅ Already registered for {target.date} {target.time}!")
+        return
+    
+    if target.can_register:
+        result = client.register(target.id, user["membership_id"])
+        if result.success:
+            await update.message.reply_text(f"🎉 *Registered!*\n\nCrossFit {target.date} {target.time}", parse_mode="Markdown")
+        else:
+            await update.message.reply_text(f"❌ Failed: {result.message}")
+    elif target.can_join_waitlist:
+        result = client.join_waitlist(target.id, user["membership_id"])
+        if result.success:
+            await update.message.reply_text(f"📋 *Joined waitlist*\n\nCrossFit {target.date} {target.time}", parse_mode="Markdown")
+        else:
+            await update.message.reply_text(f"❌ Failed: {result.message}")
+    else:
+        await update.message.reply_text(f"⏳ Registration not open yet for {target.date} {target.time}")
     user_id = update.effective_user.id
     user = get_user(user_id)
     
@@ -753,6 +1009,23 @@ async def post_init(application: Application):
     global app
     app = application
     await schedule_all_rules()
+    
+    # Add keep-alive job to prevent Render from sleeping
+    # Pings itself every 10 minutes
+    render_url = os.getenv("RENDER_EXTERNAL_URL", "")
+    if render_url:
+        import aiohttp
+        async def keep_alive():
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(render_url) as resp:
+                        logger.info(f"Keep-alive ping: {resp.status}")
+            except Exception as e:
+                logger.warning(f"Keep-alive ping failed: {e}")
+        
+        scheduler.add_job(keep_alive, 'interval', minutes=10, id='keep_alive')
+        logger.info(f"Keep-alive scheduled for {render_url}")
+    
     scheduler.start()
     logger.info("Scheduler started")
 
@@ -811,6 +1084,13 @@ def main():
     app.add_handler(CommandHandler("rules", cmd_rules))
     app.add_handler(CommandHandler("toggle", cmd_toggle))
     app.add_handler(CommandHandler("remove", cmd_remove))
+    app.add_handler(CommandHandler("myclasses", cmd_myclasses))
+    app.add_handler(CommandHandler("schedule", cmd_schedule))
+    app.add_handler(CommandHandler("cancel", cmd_cancel))
+    app.add_handler(CommandHandler("register", cmd_register))
+    
+    # Callback handlers
+    app.add_handler(CallbackQueryHandler(handle_cancel_callback, pattern="^cancel_"))
     
     # Setup conversation
     setup_handler = ConversationHandler(
