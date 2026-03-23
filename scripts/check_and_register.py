@@ -109,10 +109,15 @@ def next_occurrence(target_day, target_time, now):
 
 
 def should_try_register(rule, now):
-    """Try to register if the class is within 72 hours from now."""
+    """Try to register if the class is within 74 hours from now.
+    Using 74h instead of 72h to account for GitHub Actions cron delays
+    (runs can be delayed by up to 30 minutes or skipped entirely).
+    Arbox opens registration 72h before, so 74h ensures we never miss
+    the window. Double-registration is prevented by checking is_registered."""
     target = next_occurrence(rule["target_day"], rule["target_time"], now)
     hours_until = (target - now).total_seconds() / 3600
-    return hours_until <= 72
+    print(f"   Rule '{rule['name']}': next class in {hours_until:.1f}h ({'TRIGGER' if hours_until <= 74 else 'skip'})")
+    return hours_until <= 74
 
 
 # ── Email ────────────────────────────────────────────────────────────
