@@ -1,18 +1,18 @@
 {
-  "last_updated": "2026-04-15T18:05:38.623271+03:00",
+  "last_updated": "2026-04-15T20:01:56.203098+03:00",
   "classes": {
     "ohad": [
-      {
-        "name": "gymnastics",
-        "date": "2026-04-15",
-        "time": "19:00",
-        "day": "Wed"
-      },
       {
         "name": "CrossFit",
         "date": "2026-04-16",
         "time": "08:00",
         "day": "Thu"
+      },
+      {
+        "name": "CrossFit",
+        "date": "2026-04-18",
+        "time": "18:00",
+        "day": "Sat"
       }
     ]
   }
