@@ -1,4 +1,25 @@
 {
-  "last_updated": "2026-04-21T19:59:07.580237+03:00",
-  "classes": {}
+  "last_updated": "2026-04-21T21:05:57.727111+03:00",
+  "classes": {
+    "ohad": [
+      {
+        "name": "\u05d0\u05d9\u05de\u05d5\u05df \u05e7\u05d4\u05d9\u05dc\u05ea\u05d9 \u05d9\u05d5\u05dd \u05d4\u05e2\u05e6\u05de\u05d0\u05d5\u05ea",
+        "date": "2026-04-22",
+        "time": "10:00",
+        "day": "Wed"
+      },
+      {
+        "name": "CrossFit",
+        "date": "2026-04-23",
+        "time": "08:00",
+        "day": "Thu"
+      },
+      {
+        "name": "Weightlifting",
+        "date": "2026-04-23",
+        "time": "18:00",
+        "day": "Thu"
+      }
+    ]
+  }
 }
